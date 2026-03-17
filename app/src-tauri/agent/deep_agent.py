@@ -198,6 +198,243 @@ def search_web(
     )
 
 
+@tool
+def shell(command: str, workdir: str = "", timeout: int = 30) -> str:
+    """Executes a shell command and returns stdout/stderr output.
+
+    Use this to run any shell command like git, npm, cargo, python, etc.
+    Set workdir to run the command in a specific directory.
+    The command times out after `timeout` seconds (default 30).
+    """
+    import subprocess
+
+    if not command.strip():
+        return "Command cannot be empty."
+
+    cwd = workdir if workdir.strip() else None
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=timeout,
+        )
+        output = ""
+        if result.stdout:
+            output += result.stdout
+        if result.stderr:
+            if output:
+                output += "\n"
+            output += result.stderr
+        if result.returncode != 0:
+            output += f"\n[exit code: {result.returncode}]"
+        return output.strip() or "(no output)"
+    except subprocess.TimeoutExpired:
+        return f"Command timed out after {timeout} seconds."
+    except Exception as exc:
+        return f"Failed to execute command: {exc}"
+
+
+@tool
+def read_file(filepath: str, start_line: int = 1, end_line: int = -1) -> str:
+    """Reads the contents of a file.
+
+    Optionally specify start_line and end_line to read a specific range.
+    Use end_line=-1 (default) to read to the end of the file.
+    Returns the file contents with line numbers prefixed.
+    """
+    if not filepath.strip():
+        return "Filepath cannot be empty."
+
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return f"File not found: {filepath}"
+    except PermissionError:
+        return f"Permission denied: {filepath}"
+    except IsADirectoryError:
+        return f"Path is a directory, not a file: {filepath}"
+    except Exception as exc:
+        return f"Failed to read file: {exc}"
+
+    total = len(lines)
+    if total == 0:
+        return f"(empty file: {filepath})"
+
+    start = max(0, start_line - 1)
+    end = total if end_line == -1 else min(total, end_line)
+
+    if start >= total:
+        return f"start_line {start_line} exceeds file length ({total} lines)."
+
+    selected = lines[start:end]
+    numbered = []
+    for i, line in enumerate(selected, start=start + 1):
+        numbered.append(f"{i:6d}\t{line.rstrip()}")
+
+    header = f"--- {filepath} (lines {start + 1}-{start + len(selected)} of {total}) ---"
+    return header + "\n" + "\n".join(numbered)
+
+
+@tool
+def write_file(filepath: str, content: str, append: bool = False) -> str:
+    """Writes content to a file, creating it and parent directories if needed.
+
+    Set append=True to append to an existing file instead of overwriting.
+    Returns a confirmation message with the number of lines written.
+    """
+    if not filepath.strip():
+        return "Filepath cannot be empty."
+
+    try:
+        parent = os.path.dirname(filepath)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+
+        mode = "a" if append else "w"
+        with open(filepath, mode, encoding="utf-8") as f:
+            f.write(content)
+
+        line_count = content.count("\n") + (0 if content.endswith("\n") else 1) if content else 0
+        action = "Appended to" if append else "Wrote"
+        return f"{action} {filepath} ({line_count} lines)"
+    except PermissionError:
+        return f"Permission denied: {filepath}"
+    except Exception as exc:
+        return f"Failed to write file: {exc}"
+
+
+@tool
+def list_files(directory: str = ".", pattern: str = "", recursive: bool = True) -> str:
+    """Lists files and directories in a given path.
+
+    Use pattern to filter by glob pattern (e.g., '*.py', '**/*.ts').
+    Set recursive=False to only list immediate children.
+    Returns a formatted listing with file sizes.
+    """
+    if not directory.strip():
+        directory = "."
+
+    try:
+        if not os.path.exists(directory):
+            return f"Directory not found: {directory}"
+        if not os.path.isdir(directory):
+            return f"Path is not a directory: {directory}"
+
+        entries = []
+        if pattern:
+            import glob as glob_mod
+
+            search = os.path.join(directory, pattern)
+            paths = glob_mod.glob(search, recursive=recursive)
+        elif recursive:
+            for root, dirs, files in os.walk(directory):
+                rel_root = os.path.relpath(root, directory)
+                for d in sorted(dirs):
+                    path = os.path.join(rel_root, d) if rel_root != "." else d
+                    entries.append(f"  {path}/")
+                for f in sorted(files):
+                    path = os.path.join(rel_root, f) if rel_root != "." else f
+                    full = os.path.join(root, f)
+                    size = os.path.getsize(full)
+                    entries.append(f"  {path}  ({_format_size(size)})")
+            return "\n".join(entries) if entries else "(empty directory)"
+        else:
+            paths = [
+                os.path.join(directory, name) for name in sorted(os.listdir(directory))
+            ]
+
+        for p in sorted(paths):
+            rel = os.path.relpath(p, directory)
+            if os.path.isdir(p):
+                entries.append(f"  {rel}/")
+            else:
+                size = os.path.getsize(p)
+                entries.append(f"  {rel}  ({_format_size(size)})")
+
+        return "\n".join(entries) if entries else "(empty directory)"
+    except PermissionError:
+        return f"Permission denied: {directory}"
+    except Exception as exc:
+        return f"Failed to list files: {exc}"
+
+
+def _format_size(size: int) -> str:
+    s = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(s) < 1024:
+            return f"{s:.0f} {unit}" if unit == "B" else f"{s:.1f} {unit}"
+        s /= 1024
+    return f"{s:.1f} TB"
+
+
+@tool
+def search_files(
+    pattern: str,
+    directory: str = ".",
+    file_glob: str = "",
+    case_sensitive: bool = False,
+    max_results: int = 100,
+) -> str:
+    """Searches for a regex pattern in files under a directory.
+
+    Returns matching lines with filenames and line numbers.
+    Use file_glob to filter which files to search (e.g., '*.py', '*.rs').
+    Set case_sensitive=True for case-sensitive matching.
+    Results are limited to max_results (default 100).
+    """
+    import re
+    import glob as glob_mod
+
+    if not pattern.strip():
+        return "Search pattern cannot be empty."
+
+    if not os.path.isdir(directory):
+        return f"Directory not found: {directory}"
+
+    flags = 0 if case_sensitive else re.IGNORECASE
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as exc:
+        return f"Invalid regex pattern: {exc}"
+
+    if file_glob:
+        search_pattern = os.path.join(directory, "**", file_glob)
+    else:
+        search_pattern = os.path.join(directory, "**", "*")
+
+    results = []
+    count = 0
+    try:
+        for filepath in glob_mod.glob(search_pattern, recursive=True):
+            if count >= max_results:
+                break
+            if os.path.isdir(filepath):
+                continue
+            try:
+                with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                    for line_num, line in enumerate(f, start=1):
+                        if count >= max_results:
+                            break
+                        if regex.search(line):
+                            rel = os.path.relpath(filepath, directory)
+                            results.append(f"{rel}:{line_num}: {line.rstrip()}")
+                            count += 1
+            except (PermissionError, OSError):
+                continue
+    except Exception as exc:
+        return f"Search failed: {exc}"
+
+    if not results:
+        return f"No matches found for pattern: {pattern}"
+
+    summary = f"Found {count} match{'es' if count != 1 else ''} (showing {len(results)})"
+    return summary + "\n" + "\n".join(results)
+
+
 def build_agent():
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
@@ -211,15 +448,26 @@ def build_agent():
         max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "1200")),
         api_key=api_key,
     )
-    tools = [get_tauri_context, search_web]
+    tools = [
+        get_tauri_context,
+        search_web,
+        shell,
+        read_file,
+        write_file,
+        list_files,
+        search_files,
+    ]
 
     if create_agent is not None:
         return create_agent(
             model=llm,
             tools=tools,
             system_prompt=(
-                "You are a deep assistant for the local Tauri app."
-                " Provide a clear and concise answer to user questions."
+                "You are a versatile coding assistant with access to the local filesystem and shell."
+                " You can read files, write files, run commands, search code, and browse the web."
+                " Always prefer reading existing code before making changes."
+                " When editing files, make minimal, focused changes."
+                " Show relevant file contents with line numbers when discussing code."
             ),
         )
 
