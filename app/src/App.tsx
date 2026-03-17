@@ -68,46 +68,54 @@ function App() {
 
   useLayoutEffect(() => {
     let frame = 0;
-    let timeout: number | undefined;
+    let resizeTimeout: number | undefined;
+    let collapsedTimeout: number | undefined;
 
     const syncWindowSize = async () => {
       const card = cardRef.current;
       if (!isExpanded) {
+        // Collapsing: wait for CSS transitions to finish before shrinking window
         if (sizeRef.current.width !== ICON_SIZE || sizeRef.current.height !== ICON_SIZE) {
-          // Wait for CSS transitions to finish (approx 200ms)
-          window.clearTimeout(timeout);
-          timeout = window.setTimeout(async () => {
+          window.clearTimeout(collapsedTimeout);
+          collapsedTimeout = window.setTimeout(async () => {
             if (!isExpanded) {
               sizeRef.current = { width: ICON_SIZE, height: ICON_SIZE };
               await invoke("sync_window_size", { width: ICON_SIZE, height: ICON_SIZE });
             }
-          }, 250);
+          }, 350);
         }
         return;
       }
 
+      // Expanding: first set a generous window size so content can render
       if (!card) {
-        // Initial expansion fallback
         if (sizeRef.current.width === ICON_SIZE || sizeRef.current.width === 0) {
-          sizeRef.current = { width: MIN_WINDOW_WIDTH, height: 320 };
-          await invoke("sync_window_size", { width: MIN_WINDOW_WIDTH, height: 320 });
+          sizeRef.current = { width: MIN_WINDOW_WIDTH, height: 350 };
+          await invoke("sync_window_size", { width: MIN_WINDOW_WIDTH, height: 350 });
         }
         return;
       }
 
-      const rect = card.getBoundingClientRect();
-      const nextWidth = Math.max(MIN_WINDOW_WIDTH, Math.ceil(rect.width + WINDOW_MARGIN));
-      const nextHeight = Math.max(MIN_WINDOW_HEIGHT, Math.ceil(rect.height + WINDOW_MARGIN));
+      // Debounce rapid resizes (e.g. streaming content)
+      window.clearTimeout(resizeTimeout);
+      resizeTimeout = window.setTimeout(async () => {
+        const el = cardRef.current;
+        if (!el || !isExpanded) return;
 
-      if (
-        Math.abs(nextWidth - sizeRef.current.width) < 1 &&
-        Math.abs(nextHeight - sizeRef.current.height) < 1
-      ) {
-        return;
-      }
+        const rect = el.getBoundingClientRect();
+        const nextWidth = Math.max(MIN_WINDOW_WIDTH, Math.ceil(rect.width + WINDOW_MARGIN));
+        const nextHeight = Math.max(MIN_WINDOW_HEIGHT, Math.ceil(rect.height + WINDOW_MARGIN));
 
-      sizeRef.current = { width: nextWidth, height: nextHeight };
-      await invoke("sync_window_size", { width: nextWidth, height: nextHeight });
+        if (
+          Math.abs(nextWidth - sizeRef.current.width) < 2 &&
+          Math.abs(nextHeight - sizeRef.current.height) < 2
+        ) {
+          return;
+        }
+
+        sizeRef.current = { width: nextWidth, height: nextHeight };
+        await invoke("sync_window_size", { width: nextWidth, height: nextHeight });
+      }, 16);
     };
 
     const scheduleSync = () => {
@@ -119,7 +127,7 @@ function App() {
 
     const observer = new ResizeObserver(scheduleSync);
     if (cardRef.current) observer.observe(cardRef.current);
-    
+
     const mutationObserver = new MutationObserver(scheduleSync);
     if (cardRef.current) {
       mutationObserver.observe(cardRef.current, {
@@ -134,7 +142,8 @@ function App() {
 
     return () => {
       cancelAnimationFrame(frame);
-      window.clearTimeout(timeout);
+      window.clearTimeout(resizeTimeout);
+      window.clearTimeout(collapsedTimeout);
       observer.disconnect();
       mutationObserver.disconnect();
       window.removeEventListener("resize", scheduleSync);

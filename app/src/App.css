@@ -104,6 +104,7 @@ body {
   box-sizing: border-box;
   overflow: visible;
   position: relative;
+  contain: layout;
 }
 
 .assistant-container {
@@ -111,15 +112,16 @@ body {
   width: 160px;
   height: 160px;
   flex-shrink: 0;
-  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: width, height;
+  contain: layout style;
 }
 
 .assistant-container.expanded {
   width: 100%;
-  height: auto;
   min-width: 460px;
   max-width: 520px;
   align-items: flex-start;
@@ -138,12 +140,12 @@ body {
   border: none;
   background: transparent;
   opacity: 1;
-  transform: scale(1);
-  transition: opacity 0.25s ease, transform 0.25s ease;
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  will-change: opacity, transform;
 }
 
 .assistant-icon-trigger.hidden {
@@ -191,10 +193,15 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   overflow: hidden;
   opacity: 0;
-  transform: scale(0.95) translateY(-6px);
+  transform: scale(0.96) translateY(-4px);
   pointer-events: none;
   position: relative;
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  visibility: hidden;
+  transition:
+    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0.25s;
+  will-change: opacity, transform;
 }
 
 .assistant-card.visible {
@@ -202,6 +209,11 @@ body {
   transform: scale(1) translateY(0);
   pointer-events: auto;
   position: relative;
+  visibility: visible;
+  transition:
+    opacity 0.3s cubic-bezier(0, 0, 0.2, 1) 0.05s,
+    transform 0.3s cubic-bezier(0, 0, 0.2, 1) 0.05s,
+    visibility 0s linear 0s;
 }
 
 .assistant-header {
