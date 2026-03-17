@@ -245,7 +245,7 @@ function App() {
             <kbd className="assistant-shortcut" aria-label="Keyboard shortcut Command Shift Space">⌘⇧␣</kbd>
           </header>
 
-          <div className="assistant-input-area">
+          <div className="assistant-input-container">
             <textarea
               id="question-input"
               className="assistant-input"
@@ -257,45 +257,47 @@ function App() {
               rows={2}
               aria-label="Your question"
             />
-            <button
-              className={cn("assistant-mic-button", isRecording && "recording")}
-              onClick={toggleRecording}
-              disabled={loading || transcribing}
-              title={isRecording ? "Stop recording and transcribe" : "Start voice input"}
-              aria-label={isRecording ? "Stop recording" : "Start voice input"}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </button>
-            <button
-              className="assistant-button"
-              onClick={ask}
-              disabled={loading || !question.trim()}
-              aria-label="Ask question"
-            >
-              {loading ? (
-                <span className="button-loading">
-                  <span className="button-dots" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
+            <div className="assistant-input-actions">
+              <button
+                className={cn("assistant-mic-button", isRecording && "recording")}
+                onClick={toggleRecording}
+                disabled={loading || transcribing}
+                title={isRecording ? "Stop recording and transcribe" : "Start voice input"}
+                aria-label={isRecording ? "Stop recording" : "Start voice input"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
+              <button
+                className="assistant-button"
+                onClick={ask}
+                disabled={loading || !question.trim()}
+                aria-label="Ask question"
+              >
+                {loading ? (
+                  <span className="button-loading">
+                    <span className="button-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    Thinking
                   </span>
-                  Thinking
-                </span>
-              ) : (
-                <span className="button-text">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                  </svg>
-                  Ask
-                  <span className="button-hint">⌘↵</span>
-                </span>
-              )}
-            </button>
+                ) : (
+                  <span className="button-text">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    Ask
+                    <span className="button-hint">⌘↵</span>
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {loading && (
