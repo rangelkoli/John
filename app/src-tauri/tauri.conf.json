@@ -25,8 +25,8 @@
     "windows": [
       {
         "title": "app",
-        "width": 56,
-        "height": 56,
+        "width": 160,
+        "height": 160,
         "visible": false,
         "resizable": true,
         "minWidth": 0,

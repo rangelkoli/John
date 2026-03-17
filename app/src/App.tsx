@@ -7,7 +7,7 @@ import "./App.css";
 
 const MIN_WINDOW_WIDTH = 460;
 const MIN_WINDOW_HEIGHT = 100;
-const ICON_SIZE = 56;
+const ICON_SIZE = 160;
 const WINDOW_MARGIN = 16;
 
 /**
