@@ -239,7 +239,7 @@ function App() {
               <div className="assistant-orb" aria-hidden="true" />
             </div>
             <div className="assistant-header-text">
-              <h1 className="assistant-title">LangChain Deep Agent</h1>
+              <h1 className="assistant-title">John</h1>
               <p className="assistant-subtitle">Ask the app any question.</p>
             </div>
             <kbd className="assistant-shortcut" aria-label="Keyboard shortcut Command Shift Space">⌘⇧␣</kbd>
@@ -305,7 +305,7 @@ function App() {
               <div className="thinking-wave" aria-hidden="true">
                 <span /><span /><span /><span /><span />
               </div>
-              <p className="thinking-text">Deep agent is working on your question...</p>
+              <p className="thinking-text">John is working on your question...</p>
             </div>
           )}
 
