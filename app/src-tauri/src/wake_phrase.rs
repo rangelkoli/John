@@ -1,5 +1,4 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::SampleFormat;
 use once_cell::sync::OnceCell;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -9,11 +8,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 const WAKE_PHRASE: &str = "hey john";
-const SAMPLE_RATE: u32 = 16_000;
-const CHUNK_SIZE: usize = 1_600;
-const PRE_ROLL_SAMPLES: usize = SAMPLE_RATE as usize / 2;
-const MIN_SEGMENT_SAMPLES: usize = SAMPLE_RATE as usize / 2;
-const MAX_SEGMENT_SAMPLES: usize = SAMPLE_RATE as usize * 3;
+const CHUNK_MS: u32 = 100;
+const PRE_ROLL_MS: u32 = 500;
+const MIN_SEGMENT_MS: u32 = 500;
+const MAX_SEGMENT_MS: u32 = 3_000;
 const SILENCE_CHUNKS_TO_END: usize = 10;
 const SPEECH_RMS_THRESHOLD: f32 = 0.015;
 
@@ -55,13 +53,25 @@ fn show_assistant() {
     let _ = app_handle.emit_all("wake-phrase-detected", WAKE_PHRASE.to_string());
 }
 
-fn finalize_segment(segment: &mut Vec<f32>) -> bool {
-    if segment.len() < MIN_SEGMENT_SAMPLES || segment.len() > MAX_SEGMENT_SAMPLES {
+pub fn trigger() {
+    show_assistant();
+}
+
+fn samples_for_ms(sample_rate: u32, duration_ms: u32) -> usize {
+    ((sample_rate as u64 * duration_ms as u64) / 1000).max(1) as usize
+}
+
+fn finalize_segment(segment: &mut Vec<f32>, sample_rate: u32) -> bool {
+    let min_segment_samples = samples_for_ms(sample_rate, MIN_SEGMENT_MS);
+    let max_segment_samples = samples_for_ms(sample_rate, MAX_SEGMENT_MS);
+
+    if segment.len() < min_segment_samples || segment.len() > max_segment_samples {
         segment.clear();
         return false;
     }
 
-    let transcript = match super::audio::transcribe_samples(segment, "john-wake-phrase") {
+    let transcript =
+        match super::audio::transcribe_samples(segment, "john-wake-phrase", sample_rate) {
         Ok(text) => text,
         Err(err) => {
             eprintln!("Wake phrase transcription failed: {err}");
@@ -86,24 +96,19 @@ fn run_listener(stop_rx: mpsc::Receiver<()>) -> Result<(), String> {
         .default_input_device()
         .ok_or_else(|| "No microphone input device found.".to_string())?;
 
-    let supported_configs = device
-        .supported_input_configs()
-        .map_err(|e| format!("Failed to inspect input configs: {e}"))?;
-
-    let config_range = supported_configs
-        .filter(|config| config.channels() <= 2)
-        .find(|config| config.sample_format() == SampleFormat::F32)
-        .ok_or_else(|| "No supported f32 microphone config found.".to_string())?;
-
-    let config = config_range.with_sample_rate(cpal::SampleRate(SAMPLE_RATE));
-    let stream_config: cpal::StreamConfig = config.into();
+    let (stream_config, sample_rate, channels) =
+        super::audio::select_input_config(&device, super::audio::TARGET_SAMPLE_RATE)?;
+    let chunk_size = samples_for_ms(sample_rate, CHUNK_MS);
+    let pre_roll_samples = samples_for_ms(sample_rate, PRE_ROLL_MS);
+    let max_segment_samples = samples_for_ms(sample_rate, MAX_SEGMENT_MS);
 
     let (audio_tx, audio_rx) = mpsc::channel::<f32>();
     let stream = device
         .build_input_stream(
             &stream_config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                for &sample in data {
+                for frame in data.chunks(channels) {
+                    let sample = frame.iter().copied().sum::<f32>() / frame.len() as f32;
                     let _ = audio_tx.send(sample);
                 }
             },
@@ -116,8 +121,8 @@ fn run_listener(stop_rx: mpsc::Receiver<()>) -> Result<(), String> {
         .play()
         .map_err(|e| format!("Failed to play wake phrase stream: {e}"))?;
 
-    let mut pre_roll = VecDeque::with_capacity(PRE_ROLL_SAMPLES);
-    let mut chunk = Vec::with_capacity(CHUNK_SIZE);
+    let mut pre_roll = VecDeque::with_capacity(pre_roll_samples);
+    let mut chunk = Vec::with_capacity(chunk_size);
     let mut segment = Vec::new();
     let mut capturing = false;
     let mut silence_chunks = 0usize;
@@ -133,13 +138,13 @@ fn run_listener(stop_rx: mpsc::Receiver<()>) -> Result<(), String> {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         };
 
-        if pre_roll.len() == PRE_ROLL_SAMPLES {
+        if pre_roll.len() == pre_roll_samples {
             pre_roll.pop_front();
         }
         pre_roll.push_back(sample);
 
         chunk.push(sample);
-        if chunk.len() < CHUNK_SIZE {
+        if chunk.len() < chunk_size {
             continue;
         }
 
@@ -162,8 +167,8 @@ fn run_listener(stop_rx: mpsc::Receiver<()>) -> Result<(), String> {
                 silence_chunks += 1;
             }
 
-            if silence_chunks >= SILENCE_CHUNKS_TO_END || segment.len() >= MAX_SEGMENT_SAMPLES {
-                if finalize_segment(&mut segment) {
+            if silence_chunks >= SILENCE_CHUNKS_TO_END || segment.len() >= max_segment_samples {
+                if finalize_segment(&mut segment, sample_rate) {
                     break;
                 }
 

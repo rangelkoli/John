@@ -1,14 +1,65 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::SampleFormat;
+use cpal::{SampleFormat, SupportedStreamConfigRange};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SAMPLE_RATE: u32 = 16000;
+pub const TARGET_SAMPLE_RATE: u32 = 16_000;
+
+struct RecordedAudio {
+    sample_rate: u32,
+    samples: Vec<f32>,
+}
 
 static STOP_SENDER: Mutex<Option<mpsc::Sender<()>>> = Mutex::new(None);
-static AUDIO_THREAD: Mutex<Option<thread::JoinHandle<Vec<f32>>>> = Mutex::new(None);
+static AUDIO_THREAD: Mutex<Option<thread::JoinHandle<RecordedAudio>>> = Mutex::new(None);
+
+fn sample_rate_distance(config: &SupportedStreamConfigRange, preferred_sample_rate: u32) -> u32 {
+    let min_sample_rate = config.min_sample_rate().0;
+    let max_sample_rate = config.max_sample_rate().0;
+
+    if preferred_sample_rate < min_sample_rate {
+        min_sample_rate - preferred_sample_rate
+    } else if preferred_sample_rate > max_sample_rate {
+        preferred_sample_rate - max_sample_rate
+    } else {
+        0
+    }
+}
+
+fn pick_sample_rate(config: &SupportedStreamConfigRange, preferred_sample_rate: u32) -> u32 {
+    preferred_sample_rate.clamp(config.min_sample_rate().0, config.max_sample_rate().0)
+}
+
+pub(crate) fn select_input_config(
+    device: &cpal::Device,
+    preferred_sample_rate: u32,
+) -> Result<(cpal::StreamConfig, u32, usize), String> {
+    let mut supported_configs = device
+        .supported_input_configs()
+        .map_err(|e| format!("Failed to inspect input configs: {e}"))?
+        .filter(|config| config.channels() <= 2 && config.sample_format() == SampleFormat::F32)
+        .collect::<Vec<_>>();
+
+    supported_configs.sort_by_key(|config| {
+        (
+            if config.channels() == 1 { 0 } else { 1 },
+            sample_rate_distance(config, preferred_sample_rate),
+        )
+    });
+
+    let config_range = supported_configs
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No supported f32 microphone config found.".to_string())?;
+
+    let sample_rate = pick_sample_rate(&config_range, preferred_sample_rate);
+    let channels = config_range.channels() as usize;
+    let config = config_range.with_sample_rate(cpal::SampleRate(sample_rate));
+
+    Ok((config.into(), sample_rate, channels))
+}
 
 pub fn start_recording() -> Result<(), String> {
     let mut sender_guard = STOP_SENDER.lock().unwrap();
@@ -23,36 +74,30 @@ pub fn start_recording() -> Result<(), String> {
         let host = cpal::default_host();
         let device = match host.default_input_device() {
             Some(d) => d,
-            None => return vec![],
+            None => {
+                return RecordedAudio {
+                    sample_rate: TARGET_SAMPLE_RATE,
+                    samples: vec![],
+                };
+            }
         };
 
-        let supported_configs = match device.supported_input_configs() {
-            Ok(c) => c,
-            Err(_) => return vec![],
-        };
-
-        let config_range = supported_configs
-            .filter(|c| c.channels() <= 2)
-            .find(|c| c.sample_format() == SampleFormat::F32)
-            .or_else(|| {
-                device
-                    .supported_input_configs()
-                    .ok()?
-                    .find(|c| c.sample_format() == SampleFormat::F32)
-            });
-
-        let config_range = match config_range {
-            Some(c) => c,
-            None => return vec![],
-        };
-
-        let config = config_range.with_sample_rate(cpal::SampleRate(SAMPLE_RATE));
-        let config_inner: cpal::StreamConfig = config.into();
+        let (config_inner, sample_rate, channels) =
+            match select_input_config(&device, TARGET_SAMPLE_RATE) {
+                Ok(config) => config,
+                Err(_) => {
+                    return RecordedAudio {
+                        sample_rate: TARGET_SAMPLE_RATE,
+                        samples: vec![],
+                    };
+                }
+            };
 
         let stream = match device.build_input_stream(
             &config_inner,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                for &sample in data {
+                for frame in data.chunks(channels) {
+                    let sample = frame.iter().copied().sum::<f32>() / frame.len() as f32;
                     let _ = audio_tx.send(sample);
                 }
             },
@@ -60,11 +105,19 @@ pub fn start_recording() -> Result<(), String> {
             None,
         ) {
             Ok(s) => s,
-            Err(_) => return vec![],
+            Err(_) => {
+                return RecordedAudio {
+                    sample_rate,
+                    samples: vec![],
+                };
+            }
         };
 
         if stream.play().is_err() {
-            return vec![];
+            return RecordedAudio {
+                sample_rate,
+                samples: vec![],
+            };
         }
 
         let _ = stop_rx.recv();
@@ -75,7 +128,10 @@ pub fn start_recording() -> Result<(), String> {
         while let Ok(sample) = audio_rx.try_recv() {
             samples.push(sample);
         }
-        samples
+        RecordedAudio {
+            sample_rate,
+            samples,
+        }
     });
 
     *sender_guard = Some(stop_tx);
@@ -102,23 +158,23 @@ pub fn stop_recording(output_path: &str) -> Result<(), String> {
         guard.take()
     };
 
-    let samples = handle
+    let recorded_audio = handle
         .ok_or_else(|| "No recording thread".to_string())?
         .join()
         .map_err(|_| "Recording thread panicked".to_string())?;
 
-    if samples.is_empty() {
+    if recorded_audio.samples.is_empty() {
         return Err("No audio captured".to_string());
     }
 
-    write_wav(output_path, &samples)?;
+    write_wav(output_path, &recorded_audio.samples, recorded_audio.sample_rate)?;
     Ok(())
 }
 
-fn write_wav(path: &str, samples: &[f32]) -> Result<(), String> {
+fn write_wav(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
     let spec = hound::WavSpec {
         channels: 1,
-        sample_rate: SAMPLE_RATE,
+        sample_rate,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
@@ -136,7 +192,11 @@ fn write_wav(path: &str, samples: &[f32]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn transcribe_samples(samples: &[f32], file_prefix: &str) -> Result<String, String> {
+pub fn transcribe_samples(
+    samples: &[f32],
+    file_prefix: &str,
+    sample_rate: u32,
+) -> Result<String, String> {
     if samples.is_empty() {
         return Err("No audio captured".to_string());
     }
@@ -154,7 +214,7 @@ pub fn transcribe_samples(samples: &[f32], file_prefix: &str) -> Result<String, 
         .to_str()
         .ok_or_else(|| "Invalid temp audio path".to_string())?;
 
-    write_wav(path_str, samples)?;
+    write_wav(path_str, samples, sample_rate)?;
     let transcription = transcribe_audio(path_str);
     let _ = std::fs::remove_file(path_str);
 

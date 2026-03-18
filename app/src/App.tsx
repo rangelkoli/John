@@ -14,6 +14,14 @@ const WINDOW_MARGIN = 16;
 const MAX_CARD_SCREEN_MARGIN = WINDOW_MARGIN * 3;
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
 
+function getAssistantShortcutLabel() {
+  if (typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform)) {
+    return "Shift + Cmd + Space";
+  }
+
+  return "Shift + Ctrl + Space";
+}
+
 function getMaxCardHeight() {
   if (typeof window === "undefined") {
     return 640;
@@ -77,6 +85,7 @@ interface ToolCall {
 }
 
 function App() {
+  const shortcutLabel = getAssistantShortcutLabel();
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -336,6 +345,9 @@ function App() {
                 : tc
             )
           );
+        } else if (parsed.type === "error") {
+          setError(typeof parsed.content === "string" ? parsed.content : "Agent failed.");
+          setLoading(false);
         } else if (parsed.type === "done") {
           setLoading(false);
         }
@@ -397,9 +409,9 @@ function App() {
             </div>
             <div className="assistant-header-text">
               <h1 className="assistant-title">John</h1>
-              <p className="assistant-subtitle">Say "Hey John" to start talking.</p>
+              <p className="assistant-subtitle">Say "Hey John" or press {shortcutLabel} to start talking.</p>
             </div>
-            <kbd className="assistant-shortcut" aria-label='Wake phrase "Hey John"'>Hey John</kbd>
+            <kbd className="assistant-shortcut" aria-label={`Shortcut ${shortcutLabel}`}>{shortcutLabel}</kbd>
           </header>
 
           <div className="assistant-input-container">

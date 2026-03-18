@@ -8,12 +8,131 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import tool
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
 from perplexity import Perplexity
+
+DEFAULT_OPENAI_MODEL = "gpt-5-nano-2025-08-07"
+DEFAULT_OPENROUTER_MODEL = "x-ai/grok-4.1-fast"
+DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+MAX_TOOL_EVENT_STRING_LENGTH = 400
+MAX_TOOL_EVENT_COLLECTION_ITEMS = 8
+MAX_TOOL_EVENT_DEPTH = 2
+
+
+def _strip_optional_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _load_env_files() -> None:
+    app_dir = Path(__file__).resolve().parents[2]
+    candidates = [
+        app_dir / ".env.local",
+        app_dir / ".env",
+        app_dir / "src-tauri" / ".env.local",
+        app_dir / "src-tauri" / ".env",
+    ]
+
+    for path in candidates:
+        if not path.is_file():
+            continue
+
+        for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+
+            if "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key or os.getenv(key):
+                continue
+
+            os.environ[key] = _strip_optional_quotes(value.strip())
+
+
+def _env_first(*keys: str) -> str:
+    for key in keys:
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _resolve_provider() -> str:
+    provider = _env_first("DEEP_AGENT_PROVIDER", "DEEP_AGENT_LLM_PROVIDER").lower()
+    if not provider:
+        return "openrouter"
+    if provider in {"openrouter", "open-router", "open_router"}:
+        return "openrouter"
+    if provider == "openai":
+        return "openai"
+    raise RuntimeError(
+        f"Unsupported DEEP_AGENT_PROVIDER: {provider}. Use 'openrouter' or 'openai'."
+    )
+
+
+def _resolve_llm_kwargs(*, streaming: bool = False) -> dict[str, Any]:
+    provider = _resolve_provider()
+    kwargs: dict[str, Any] = {
+        "temperature": float(os.getenv("OPENAI_TEMPERATURE", "0")),
+        "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "1200")),
+        "streaming": streaming,
+    }
+
+    if provider == "openrouter":
+        api_key = _env_first("DEEP_AGENT_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "OpenRouter is selected for the deep agent, but no API key was found. "
+                "Set OPENROUTER_API_KEY (or DEEP_AGENT_API_KEY)."
+            )
+
+        kwargs["model"] = _env_first("DEEP_AGENT_MODEL", "OPENROUTER_MODEL") or DEFAULT_OPENROUTER_MODEL
+        kwargs["api_key"] = api_key
+        kwargs["base_url"] = _env_first("DEEP_AGENT_BASE_URL", "OPENROUTER_BASE_URL") or DEFAULT_OPENROUTER_BASE_URL
+
+        headers: dict[str, str] = {}
+        http_referer = _env_first("OPENROUTER_HTTP_REFERER")
+        app_title = _env_first("OPENROUTER_APP_TITLE")
+        if http_referer:
+            headers["HTTP-Referer"] = http_referer
+        if app_title:
+            headers["X-Title"] = app_title
+        if headers:
+            kwargs["default_headers"] = headers
+
+        return kwargs
+
+    api_key = _env_first("DEEP_AGENT_API_KEY", "OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "OpenAI is selected for the deep agent, but OPENAI_API_KEY is missing."
+        )
+
+    kwargs["model"] = _env_first("DEEP_AGENT_MODEL", "OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
+    kwargs["api_key"] = api_key
+    base_url = _env_first("DEEP_AGENT_BASE_URL", "OPENAI_BASE_URL")
+    if base_url:
+        kwargs["base_url"] = base_url
+    return kwargs
+
+
+def _build_llm(*, streaming: bool = False) -> ChatOpenAI:
+    return ChatOpenAI(**_resolve_llm_kwargs(streaming=streaming))
+
+
+_load_env_files()
 
 
 def _fetch_tauri_bridge(question: str) -> str:
@@ -54,6 +173,57 @@ def _extract_message_text(messages: list[BaseMessage] | list[dict[str, Any]]) ->
     return "Agent returned an empty response."
 
 
+def _truncate_text(value: str, limit: int = MAX_TOOL_EVENT_STRING_LENGTH) -> str:
+    if len(value) <= limit:
+        return value
+    return f"{value[: limit - 1]}…"
+
+
+def _summarize_for_event(value: Any, *, depth: int = 0) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+
+    if isinstance(value, str):
+        return _truncate_text(value)
+
+    if depth >= MAX_TOOL_EVENT_DEPTH:
+        return _truncate_text(repr(value))
+
+    if isinstance(value, dict):
+        items = list(value.items())
+        summarized = {
+            str(key): _summarize_for_event(item, depth=depth + 1)
+            for key, item in items[:MAX_TOOL_EVENT_COLLECTION_ITEMS]
+        }
+        if len(items) > MAX_TOOL_EVENT_COLLECTION_ITEMS:
+            summarized["..."] = f"{len(items) - MAX_TOOL_EVENT_COLLECTION_ITEMS} more field(s)"
+        return summarized
+
+    if isinstance(value, (list, tuple, set)):
+        items = list(value)
+        summarized = [
+            _summarize_for_event(item, depth=depth + 1)
+            for item in items[:MAX_TOOL_EVENT_COLLECTION_ITEMS]
+        ]
+        if len(items) > MAX_TOOL_EVENT_COLLECTION_ITEMS:
+            summarized.append(f"... {len(items) - MAX_TOOL_EVENT_COLLECTION_ITEMS} more item(s)")
+        return summarized
+
+    return _truncate_text(repr(value))
+
+
+def _stringify_for_event(value: Any) -> str:
+    summarized = _summarize_for_event(value)
+    if isinstance(summarized, str):
+        return summarized
+
+    try:
+        rendered = json.dumps(summarized, ensure_ascii=False)
+    except TypeError:
+        rendered = repr(summarized)
+    return _truncate_text(rendered)
+
+
 async def _stream_agent_response(question: str) -> None:
     """Stream the agent response as JSON events to stdout."""
     try:
@@ -77,7 +247,7 @@ async def _stream_agent_response(question: str) -> None:
                     elif event_type == "on_tool_start":
                         data = event.get("data", {})
                         tool_name = data.get("name", "unknown")
-                        tool_input = data.get("input", {})
+                        tool_input = _summarize_for_event(data.get("input", {}))
                         run_id = event.get("run_id", "")
                         event_data = json.dumps({
                             "type": "tool_call",
@@ -94,27 +264,21 @@ async def _stream_agent_response(question: str) -> None:
                         run_id = event.get("run_id", "")
                         output_str = ""
                         if hasattr(output, "content"):
-                            output_str = str(output.content)
+                            output_str = _stringify_for_event(output.content)
                         elif output is not None:
-                            output_str = str(output)
+                            output_str = _stringify_for_event(output)
                         event_data = json.dumps({
                             "type": "tool_result",
                             "run_id": run_id,
                             "tool": tool_name,
-                            "output": output_str[:500],
+                            "output": output_str,
                         })
                         print(event_data, flush=True)
                 
                 print(json.dumps({"type": "done"}), flush=True)
             except (AttributeError, TypeError):
                 # Fallback: try direct LLM streaming
-                llm = ChatOpenAI(
-                    model=os.getenv("OPENAI_MODEL", "gpt-5-nano-2025-08-07"),
-                    temperature=float(os.getenv("OPENAI_TEMPERATURE", "0")),
-                    max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "1200")),
-                    api_key=os.getenv("OPENAI_API_KEY", "").strip(),
-                    streaming=True,
-                )
+                llm = _build_llm(streaming=True)
                 
                 from langchain_core.messages import HumanMessage
                 async for chunk in llm.astream([HumanMessage(content=question)]):
@@ -469,18 +633,7 @@ def search_files(
 
 
 def build_agent():
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY is missing. Set it in your environment before running the agent."
-        )
-
-    llm = ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-5-nano-2025-08-07"),
-        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0")),
-        max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "1200")),
-        api_key=api_key,
-    )
+    llm = _build_llm()
     tools = [
         get_tauri_context,
         search_web,

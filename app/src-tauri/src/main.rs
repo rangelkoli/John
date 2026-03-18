@@ -4,13 +4,16 @@
 mod audio;
 mod wake_phrase;
 
+use std::env;
+use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 use std::str;
-use tauri::{Manager, PhysicalPosition, Position};
+use tauri::{GlobalShortcutManager, Manager, PhysicalPosition, Position};
 
 const WINDOW_MARGIN: i32 = 16;
+const ASSISTANT_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
@@ -46,6 +49,79 @@ fn configure_transparent_window(window: &tauri::Window) {
             ns_window.setOpaque_(NO);
             ns_window.setBackgroundColor_(NSColor::clearColor(nil));
         }
+    }
+}
+
+fn strip_optional_quotes(value: &str) -> String {
+    let bytes = value.as_bytes();
+    if value.len() >= 2
+        && ((bytes[0] == b'"' && bytes[value.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[value.len() - 1] == b'\''))
+    {
+        value[1..value.len() - 1].to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn load_env_file(path: &Path) {
+    let Ok(contents) = fs::read_to_string(path) else {
+        return;
+    };
+
+    for raw_line in contents.lines() {
+        let mut line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix("export ") {
+            line = rest.trim();
+        }
+
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+
+        let key = key.trim();
+        if key.is_empty() || env::var_os(key).is_some() {
+            continue;
+        }
+
+        env::set_var(key, strip_optional_quotes(value.trim()));
+    }
+}
+
+fn load_known_env_files() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let app_dir = manifest_dir
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| manifest_dir.clone());
+
+    for path in [
+        app_dir.join(".env.local"),
+        app_dir.join(".env"),
+        manifest_dir.join(".env.local"),
+        manifest_dir.join(".env"),
+    ] {
+        load_env_file(&path);
+    }
+}
+
+enum AgentProcessEvent {
+    Stream(String),
+    Error(String),
+}
+
+fn emit_app_event(app_handle: &tauri::AppHandle, event: &'static str, payload: String) {
+    let dispatcher = app_handle.clone();
+    let emitter = app_handle.clone();
+
+    if let Err(err) = dispatcher.run_on_main_thread(move || {
+        let _ = emitter.emit_all(event, payload);
+    }) {
+        eprintln!("failed to emit {event}: {err}");
     }
 }
 
@@ -138,31 +214,62 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
 
-    let app_handle_clone = app_handle.clone();
+    let (event_tx, event_rx) = std::sync::mpsc::channel::<AgentProcessEvent>();
+    let dispatch_handle = app_handle.clone();
 
-    // Spawn a thread to handle streaming output
     std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-
-        for line in reader.lines() {
-            match line {
-                Ok(line) if !line.trim().is_empty() => {
-                    let _ = app_handle_clone.emit_all("agent-stream", line);
+        for event in event_rx {
+            match event {
+                AgentProcessEvent::Stream(line) => {
+                    emit_app_event(&dispatch_handle, "agent-stream", line);
                 }
-                _ => break,
+                AgentProcessEvent::Error(err) => {
+                    emit_app_event(&dispatch_handle, "agent-stream-error", err);
+                }
             }
         }
     });
 
-    // Handle stderr and process completion in another thread
+    let stdout_tx = event_tx.clone();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(line) if !line.trim().is_empty() => {
+                    if stdout_tx.send(AgentProcessEvent::Stream(line)).is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => continue,
+                Err(err) => {
+                    let _ = stdout_tx.send(AgentProcessEvent::Error(format!(
+                        "Failed to read agent output: {err}"
+                    )));
+                    break;
+                }
+            }
+        }
+    });
+
+    let stderr_tx = event_tx.clone();
     std::thread::spawn(move || {
         let stderr_reader = BufReader::new(stderr);
         let mut stderr_output = String::new();
 
         for line in stderr_reader.lines() {
-            if let Ok(line) = line {
-                stderr_output.push_str(&line);
-                stderr_output.push('\n');
+            match line {
+                Ok(line) => {
+                    if !line.trim().is_empty() {
+                        stderr_output.push_str(&line);
+                        stderr_output.push('\n');
+                    }
+                }
+                Err(err) => {
+                    let _ = stderr_tx.send(AgentProcessEvent::Error(format!(
+                        "Failed to read agent error output: {err}"
+                    )));
+                    return;
+                }
             }
         }
 
@@ -174,17 +281,18 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
                 } else {
                     "Agent process failed without stderr output.".to_string()
                 };
-                let _ = app_handle.emit_all("agent-stream-error", err);
+                let _ = stderr_tx.send(AgentProcessEvent::Error(err));
             }
             Err(e) => {
-                let _ = app_handle.emit_all(
-                    "agent-stream-error",
-                    format!("Failed to wait for agent: {e}"),
-                );
+                let _ = stderr_tx.send(AgentProcessEvent::Error(format!(
+                    "Failed to wait for agent: {e}"
+                )));
             }
             _ => {}
         }
     });
+
+    drop(event_tx);
 
     Ok(())
 }
@@ -286,6 +394,8 @@ fn reveal_path_in_file_manager(path: String) -> Result<(), String> {
 }
 
 fn main() {
+    load_known_env_files();
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             ask_deep_agent,
@@ -304,6 +414,17 @@ fn main() {
             if let Some(window) = app_handle.get_window("main") {
                 configure_transparent_window(&window);
             }
+
+            let shortcut_app_handle = app_handle.clone();
+            app_handle
+                .global_shortcut_manager()
+                .register(ASSISTANT_SHORTCUT, move || {
+                    if let Some(window) = shortcut_app_handle.get_window("main") {
+                        let _ = window.unminimize();
+                    }
+                    wake_phrase::trigger();
+                })
+                .map_err(|err| format!("Failed to register assistant shortcut: {err}"))?;
 
             wake_phrase::start(app_handle.clone())?;
 
