@@ -2,12 +2,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod wake_phrase;
 
-use tauri::{GlobalShortcutManager, Manager, PhysicalPosition, Position};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command as ProcessCommand, Stdio};
-use std::io::{BufRead, BufReader};
 use std::str;
+use tauri::{Manager, PhysicalPosition, Position};
+
+const WINDOW_MARGIN: i32 = 16;
 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
@@ -21,10 +24,12 @@ fn position_top_right(window: &tauri::Window) {
         let monitor_size = monitor.size();
         let monitor_position = monitor.position();
         let scale_factor = monitor.scale_factor();
-        let physical_margin = (16.0 * scale_factor) as i32;
+        let physical_margin = (WINDOW_MARGIN as f64 * scale_factor) as i32;
 
         if let Ok(window_size) = window.outer_size() {
-            let x = monitor_position.x + monitor_size.width as i32 - window_size.width as i32 - physical_margin;
+            let x = monitor_position.x + monitor_size.width as i32
+                - window_size.width as i32
+                - physical_margin;
             let y = monitor_position.y + physical_margin;
             let _ = window.set_position(Position::Physical(PhysicalPosition { x, y }));
         }
@@ -50,12 +55,17 @@ fn sync_window_size(window: tauri::Window, width: f64, height: f64) {
         let monitor_size = monitor.size();
         let monitor_position = monitor.position();
         let scale_factor = monitor.scale_factor();
-        let physical_margin = (16.0 * scale_factor) as i32;
+        let physical_margin = (WINDOW_MARGIN as f64 * scale_factor) as i32;
+        let max_physical_height = monitor_size
+            .height
+            .saturating_sub((physical_margin.max(0) as u32) * 2);
 
         let physical_width = (width * scale_factor) as u32;
-        let physical_height = (height * scale_factor) as u32;
+        let physical_height = ((height * scale_factor) as u32).min(max_physical_height);
 
-        let x = monitor_position.x + monitor_size.width as i32 - physical_width as i32 - physical_margin;
+        let x = monitor_position.x + monitor_size.width as i32
+            - physical_width as i32
+            - physical_margin;
         let y = monitor_position.y + physical_margin;
 
         let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
@@ -133,7 +143,7 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
     // Spawn a thread to handle streaming output
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        
+
         for line in reader.lines() {
             match line {
                 Ok(line) if !line.trim().is_empty() => {
@@ -148,7 +158,7 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
     std::thread::spawn(move || {
         let stderr_reader = BufReader::new(stderr);
         let mut stderr_output = String::new();
-        
+
         for line in stderr_reader.lines() {
             if let Ok(line) = line {
                 stderr_output.push_str(&line);
@@ -167,7 +177,10 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
                 let _ = app_handle.emit_all("agent-stream-error", err);
             }
             Err(e) => {
-                let _ = app_handle.emit_all("agent-stream-error", format!("Failed to wait for agent: {e}"));
+                let _ = app_handle.emit_all(
+                    "agent-stream-error",
+                    format!("Failed to wait for agent: {e}"),
+                );
             }
             _ => {}
         }
@@ -200,6 +213,78 @@ fn stop_and_transcribe(app_handle: tauri::AppHandle) -> Result<String, String> {
     Ok(text)
 }
 
+#[tauri::command]
+fn resume_wake_phrase_listener() -> Result<(), String> {
+    wake_phrase::resume()
+}
+
+#[tauri::command]
+fn pause_wake_phrase_listener() -> Result<(), String> {
+    wake_phrase::pause()
+}
+
+#[tauri::command]
+fn reveal_path_in_file_manager(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path cannot be empty.".to_string());
+    }
+
+    let resolved = std::fs::canonicalize(PathBuf::from(trimmed))
+        .map_err(|err| format!("Failed to resolve path \"{trimmed}\": {err}"))?;
+
+    #[cfg(target_os = "macos")]
+    let status = if resolved.is_dir() {
+        ProcessCommand::new("open")
+            .arg(&resolved)
+            .status()
+            .map_err(|err| format!("Failed to open Finder: {err}"))?
+    } else {
+        ProcessCommand::new("open")
+            .arg("-R")
+            .arg(&resolved)
+            .status()
+            .map_err(|err| format!("Failed to reveal file in Finder: {err}"))?
+    };
+
+    #[cfg(target_os = "windows")]
+    let status = {
+        let mut command = ProcessCommand::new("explorer");
+        if resolved.is_dir() {
+            command.arg(&resolved);
+        } else {
+            command.arg("/select,").arg(&resolved);
+        }
+
+        command
+            .status()
+            .map_err(|err| format!("Failed to open File Explorer: {err}"))?
+    };
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let status = {
+        let target = if resolved.is_dir() {
+            resolved.clone()
+        } else {
+            resolved
+                .parent()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| resolved.clone())
+        };
+
+        ProcessCommand::new("xdg-open")
+            .arg(target)
+            .status()
+            .map_err(|err| format!("Failed to open file manager: {err}"))?
+    };
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("File manager exited unsuccessfully.".to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -207,6 +292,9 @@ fn main() {
             ask_deep_agent_stream,
             start_voice_recording,
             stop_and_transcribe,
+            resume_wake_phrase_listener,
+            pause_wake_phrase_listener,
+            reveal_path_in_file_manager,
             sync_window_size
         ])
         .setup(|app| {
@@ -217,21 +305,7 @@ fn main() {
                 configure_transparent_window(&window);
             }
 
-            app_handle.global_shortcut_manager().register(
-                "Shift+CommandOrControl+Space",
-                move || {
-                    if let Some(window) = app_handle.get_window("main") {
-                        if window.is_visible().unwrap_or(false) {
-                            let _ = window.hide();
-                            return;
-                        }
-
-                        position_top_right(&window);
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                },
-            )?;
+            wake_phrase::start(app_handle.clone())?;
 
             Ok(())
         })

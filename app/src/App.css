@@ -109,8 +109,8 @@ body {
 
 .assistant-container {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 0;
+  height: 0;
   flex-shrink: 0;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -118,6 +118,7 @@ body {
   justify-content: center;
   will-change: width, height;
   contain: layout style;
+  overflow: visible;
 }
 
 .assistant-container.expanded {
@@ -126,52 +127,6 @@ body {
   max-width: 520px;
   align-items: flex-start;
   justify-content: flex-end;
-}
-
-.assistant-icon-trigger {
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  border: none;
-  background: transparent;
-  opacity: 1;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(1);
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  will-change: opacity, transform;
-}
-
-.assistant-icon-trigger.hidden {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.8);
-  pointer-events: none;
-}
-
-.assistant-orb-small {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    #89f7fe 0%,
-    #66a6ff 30%,
-    #7c73ff 60%,
-    #a86eff 100%
-  );
-  animation: pulse-glow 3s ease-in-out infinite, float 4s ease-in-out infinite;
-  box-shadow: 0 0 20px rgba(115, 123, 255, 0.5), 0 0 40px rgba(115, 123, 255, 0.3);
-  transition: transform 0.2s ease;
-}
-
-.assistant-icon-trigger:hover .assistant-orb-small {
-  transform: scale(1.1);
 }
 
 .assistant-card {
@@ -191,12 +146,15 @@ body {
     0 24px 80px rgba(0, 0, 0, 0.4),
     0 8px 24px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   opacity: 0;
   transform: scale(0.96) translateY(-4px);
   pointer-events: none;
   position: relative;
   visibility: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   transition:
     opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
@@ -214,6 +172,26 @@ body {
     opacity 0.3s cubic-bezier(0, 0, 0.2, 1) 0.05s,
     transform 0.3s cubic-bezier(0, 0, 0.2, 1) 0.05s,
     visibility 0s linear 0s;
+}
+
+.assistant-card::-webkit-scrollbar {
+  width: 10px;
+}
+
+.assistant-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assistant-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.assistant-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
 }
 
 .assistant-header {
@@ -629,4 +607,96 @@ body {
 
 .answer-content th {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* Tool calls */
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fade-in 0.3s ease;
+}
+
+.tool-calls-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.tool-calls-header svg {
+  opacity: 0.5;
+}
+
+.tool-call-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  animation: fade-in 0.25s ease;
+}
+
+.tool-call-item.running {
+  border-color: rgba(102, 166, 255, 0.2);
+}
+
+.tool-call-item.completed {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.tool-call-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tool-call-name code {
+  background: rgba(124, 115, 255, 0.15);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: "SF Mono", "Fira Code", "Monaco", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #a8b4ff;
+}
+
+.tool-call-item.running .tool-call-name code {
+  color: #89f7fe;
+}
+
+.tool-call-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(102, 166, 255, 0.3);
+  border-top-color: #66a6ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.tool-call-output {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-family: "SF Mono", "Fira Code", "Monaco", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.45);
+  max-height: 100px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

@@ -21,3 +21,10 @@ This template should help get you started developing with Tauri, React and Types
 - The agent exposes `search_web` as a tool with inputs (`query`, `max_results`, `max_tokens`, and `max_tokens_per_page`).
 
 At runtime, type a question in the overlay and press **Ask** to see the agent output.
+
+## Wake Phrase
+
+- The app now runs a hidden background wake listener for `Hey John`.
+- Hearing `Hey John` opens the assistant window and starts the existing voice-input flow.
+- There is no always-visible floating trigger now. The assistant stays hidden until the wake phrase is spoken.
+- macOS may still show its own microphone privacy indicator while the app is listening in the background.

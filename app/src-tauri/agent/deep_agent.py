@@ -63,7 +63,9 @@ async def _stream_agent_response(question: str) -> None:
             # New API - use astream_events for better streaming
             try:
                 async for event in agent.astream_events({"messages": [{"type": "human", "content": question}]}, version="v2"):
-                    if event.get("event") == "on_chat_model_stream":
+                    event_type = event.get("event")
+                    
+                    if event_type == "on_chat_model_stream":
                         data = event.get("data", {})
                         chunk = data.get("chunk")
                         if chunk and hasattr(chunk, "content"):
@@ -71,6 +73,37 @@ async def _stream_agent_response(question: str) -> None:
                             if content:
                                 event_data = json.dumps({"type": "chunk", "content": str(content)})
                                 print(event_data, flush=True)
+                    
+                    elif event_type == "on_tool_start":
+                        data = event.get("data", {})
+                        tool_name = data.get("name", "unknown")
+                        tool_input = data.get("input", {})
+                        run_id = event.get("run_id", "")
+                        event_data = json.dumps({
+                            "type": "tool_call",
+                            "run_id": run_id,
+                            "tool": tool_name,
+                            "input": tool_input,
+                        })
+                        print(event_data, flush=True)
+                    
+                    elif event_type == "on_tool_end":
+                        data = event.get("data", {})
+                        tool_name = data.get("name", "unknown")
+                        output = data.get("output")
+                        run_id = event.get("run_id", "")
+                        output_str = ""
+                        if hasattr(output, "content"):
+                            output_str = str(output.content)
+                        elif output is not None:
+                            output_str = str(output)
+                        event_data = json.dumps({
+                            "type": "tool_result",
+                            "run_id": run_id,
+                            "tool": tool_name,
+                            "output": output_str[:500],
+                        })
+                        print(event_data, flush=True)
                 
                 print(json.dumps({"type": "done"}), flush=True)
             except (AttributeError, TypeError):

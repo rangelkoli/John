@@ -3,6 +3,7 @@ use cpal::SampleFormat;
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAMPLE_RATE: u32 = 16000;
 
@@ -133,6 +134,31 @@ fn write_wav(path: &str, samples: &[f32]) -> Result<(), String> {
         .finalize()
         .map_err(|e| format!("WAV finalize error: {e}"))?;
     Ok(())
+}
+
+pub fn transcribe_samples(samples: &[f32], file_prefix: &str) -> Result<String, String> {
+    if samples.is_empty() {
+        return Err("No audio captured".to_string());
+    }
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("Clock error: {e}"))?
+        .as_millis();
+
+    let audio_path = std::env::temp_dir().join(format!(
+        "{file_prefix}-{}-{timestamp}.wav",
+        std::process::id()
+    ));
+    let path_str = audio_path
+        .to_str()
+        .ok_or_else(|| "Invalid temp audio path".to_string())?;
+
+    write_wav(path_str, samples)?;
+    let transcription = transcribe_audio(path_str);
+    let _ = std::fs::remove_file(path_str);
+
+    transcription
 }
 
 pub fn transcribe_audio(audio_path: &str) -> Result<String, String> {
