@@ -10,6 +10,10 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 use std::str;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{GlobalShortcutManager, Manager, PhysicalPosition, Position};
 
 const WINDOW_MARGIN: i32 = 16;
@@ -114,6 +118,18 @@ enum AgentProcessEvent {
     Error(String),
 }
 
+fn is_structured_error_event(line: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("type")
+                .and_then(|value| value.as_str())
+                .map(|value| value == "error")
+        })
+        .unwrap_or(false)
+}
+
 fn emit_app_event(app_handle: &tauri::AppHandle, event: &'static str, payload: String) {
     let dispatcher = app_handle.clone();
     let emitter = app_handle.clone();
@@ -216,6 +232,7 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
 
     let (event_tx, event_rx) = std::sync::mpsc::channel::<AgentProcessEvent>();
     let dispatch_handle = app_handle.clone();
+    let saw_structured_error = Arc::new(AtomicBool::new(false));
 
     std::thread::spawn(move || {
         for event in event_rx {
@@ -231,11 +248,15 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
     });
 
     let stdout_tx = event_tx.clone();
+    let stdout_error_flag = saw_structured_error.clone();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             match line {
                 Ok(line) if !line.trim().is_empty() => {
+                    if is_structured_error_event(&line) {
+                        stdout_error_flag.store(true, Ordering::Relaxed);
+                    }
                     if stdout_tx.send(AgentProcessEvent::Stream(line)).is_err() {
                         break;
                     }
@@ -252,6 +273,7 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
     });
 
     let stderr_tx = event_tx.clone();
+    let stderr_error_flag = saw_structured_error.clone();
     std::thread::spawn(move || {
         let stderr_reader = BufReader::new(stderr);
         let mut stderr_output = String::new();
@@ -276,6 +298,9 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
         let status = child.wait();
         match status {
             Ok(s) if !s.success() => {
+                if stderr_error_flag.load(Ordering::Relaxed) {
+                    return;
+                }
                 let err = if !stderr_output.trim().is_empty() {
                     stderr_output.trim().to_string()
                 } else {
@@ -300,6 +325,16 @@ fn ask_deep_agent_stream(app_handle: tauri::AppHandle, question: String) -> Resu
 #[tauri::command]
 fn start_voice_recording() -> Result<(), String> {
     audio::start_recording()
+}
+
+#[tauri::command]
+fn cancel_voice_recording() -> Result<(), String> {
+    audio::cancel_recording()
+}
+
+#[tauri::command]
+fn capture_voice_query() -> Result<String, String> {
+    audio::capture_until_silence()
 }
 
 #[tauri::command]
@@ -401,6 +436,8 @@ fn main() {
             ask_deep_agent,
             ask_deep_agent_stream,
             start_voice_recording,
+            cancel_voice_recording,
+            capture_voice_query,
             stop_and_transcribe,
             resume_wake_phrase_listener,
             pause_wake_phrase_listener,
@@ -432,4 +469,24 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_structured_error_event;
+
+    #[test]
+    fn detects_structured_error_stream_events() {
+        assert!(is_structured_error_event(
+            r#"{"type":"error","content":"Agent failed"}"#
+        ));
+    }
+
+    #[test]
+    fn ignores_non_error_or_invalid_stream_events() {
+        assert!(!is_structured_error_event(
+            r#"{"type":"chunk","content":"hello"}"#
+        ));
+        assert!(!is_structured_error_event("not-json"));
+    }
 }

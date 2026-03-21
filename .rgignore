@@ -1,0 +1,12 @@
+.git/
+node_modules/
+dist/
+dist-ssr/
+target/
+coverage/
+*.pyc
+*.pyo
+*.so
+*.dylib
+*.a
+*.o
