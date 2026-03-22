@@ -7,6 +7,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+
+
 pub const TARGET_SAMPLE_RATE: u32 = 16_000;
 const CAPTURE_CHUNK_MS: u32 = 80;
 const CAPTURE_PRE_ROLL_MS: u32 = 250;
