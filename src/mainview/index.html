@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>John Assistant</title>
+    <link rel="stylesheet" href="index.css">
+    <script type="module" src="index.js"></script>
+</head>
+<body>
+    <main class="app-shell collapsed">
+        <section class="hero-panel" aria-label="Assistant overview">
+            <div class="hero-copy">
+                <p class="eyebrow">Desktop voice companion</p>
+                <h1>John Assistant</h1>
+                <p class="hero-text">A Siri-like assistant for quick answers, prompts, and spoken replies right on your desktop.</p>
+            </div>
+
+            <div class="status-card" aria-live="polite">
+                <div>
+                    <p class="card-label">Voice status</p>
+                    <p class="card-value" id="voice-status">Ready to listen</p>
+                </div>
+                <div>
+                    <p class="card-label">Speech output</p>
+                    <p class="card-value" id="speech-status">Enabled</p>
+                </div>
+            </div>
+
+            <div class="orb" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </section>
+
+        <section class="assistant-panel" aria-label="Assistant chat interface">
+            <header class="assistant-header drag-region">
+                <div>
+                    <p class="panel-kicker">Conversation</p>
+                    <h2>Ask for help, a plan, or a quick answer</h2>
+                </div>
+                <div class="no-drag" style="display: flex; gap: 10px;">
+                    <button class="secondary-button" id="toggle-speech" type="button">Mute voice</button>
+                    <button class="secondary-button" id="minimize-button" type="button">Minimize</button>
+                </div>
+            </header>
+
+            <div class="conversation" id="conversation" aria-live="polite"></div>
+
+            <div class="suggestions" aria-label="Suggested prompts">
+                <button class="suggestion-chip" type="button" data-prompt="What's on my agenda today?">Agenda</button>
+                <button class="suggestion-chip" type="button" data-prompt="Give me a focused work plan for the next hour.">Focus plan</button>
+                <button class="suggestion-chip" type="button" data-prompt="Tell me something encouraging.">Encouragement</button>
+                <button class="suggestion-chip" type="button" data-prompt="What time is it?">Current time</button>
+            </div>
+
+            <form class="composer" id="composer">
+                <label class="sr-only" for="prompt-input">Message John Assistant</label>
+                <textarea id="prompt-input" rows="1" placeholder="Type a request for John Assistant"></textarea>
+                <div class="composer-actions">
+                    <button class="secondary-button" id="voice-button" type="button">Start listening</button>
+                    <button class="primary-button" type="submit">Send</button>
+                </div>
+            </form>
+        </section>
+    </main>
+</body>
+</html>
