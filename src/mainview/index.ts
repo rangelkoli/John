@@ -2,6 +2,7 @@ import { Electroview } from "electrobun/view";
 import type { JohnRPCType, AIProvider } from "../shared/types";
 
 const rpc = Electroview.defineRPC<JohnRPCType>({
+	maxRequestTime: 120_000, // 2 minutes — LLM calls can take a while
 	handlers: {
 		requests: {},
 		messages: {},
@@ -212,7 +213,9 @@ async function handlePrompt(prompt: string) {
 			addMessage("assistant", result.response);
 			speak(result.response);
 		} else {
-			const errorMsg = "Sorry, I couldn't process that. Please make sure Ollama is running.";
+			const errorMsg = result.error?.includes("Ollama")
+				? result.error
+				: result.error || "Sorry, I couldn't process that. Please try again.";
 			addMessage("assistant", errorMsg);
 			speak(errorMsg);
 		}
@@ -220,7 +223,10 @@ async function handlePrompt(prompt: string) {
 		console.error("RPC error:", error);
 		removeThinking();
 
-		const errorMsg = "Sorry, I'm having trouble connecting to the AI agent.";
+		const detail = error instanceof Error ? error.message : String(error);
+		const errorMsg = detail.includes("timed out")
+			? "The request took too long. Please try again."
+			: "Sorry, I'm having trouble connecting to the AI agent.";
 		addMessage("assistant", errorMsg);
 		speak(errorMsg);
 	}

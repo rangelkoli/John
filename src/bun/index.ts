@@ -10,16 +10,18 @@ const initialX = display.workArea.x + display.workArea.width - initialWidth;
 const initialY = display.workArea.y;
 
 const rpc = BrowserView.defineRPC<JohnRPCType>({
+	maxRequestTime: 120_000, // 2 minutes — LLM calls can take a while
 	handlers: {
 		requests: {
 			processMessage: async ({ message, provider }) => {
 				try {
 					const response = await processUserMessage(message, provider);
 					console.log(`Agent response (${provider}):`, response);
-					return { success: true, response };
+					return { success: true, response: String(response || ""), error: "" };
 				} catch (error) {
 					console.error("Agent error:", error);
-					return { success: false, error: String(error) };
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					return { success: false, response: "", error: errorMessage };
 				}
 			},
 			resizeWindow: async ({ width, height }) => {
