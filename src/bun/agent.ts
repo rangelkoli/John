@@ -3,8 +3,10 @@ import { MemorySaver, START, StateGraph } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import type { AIProvider } from "../shared/types";
 
 interface AgentState {
   messages: BaseMessage[];
@@ -55,51 +57,81 @@ const getAgenda = new DynamicStructuredTool({
 });
 
 const tools = [getTime, getDate, getFocusPlan, getAgenda];
-
-const model = new ChatOpenAI({
-  modelName: process.env.OLLAMA_MODEL || "qwen3.5:9b",
-  configuration: {
-    baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
-  },
-  apiKey: "ollama",
-  temperature: 0.7,
-}).bindTools(tools);
 const toolNode = new ToolNode(tools);
 
-function shouldContinue(state: AgentState): "tools" | "end" {
-  const messages = state.messages;
-  const lastMessage = messages[messages.length - 1];
+function createLocalModel() {
+  return new ChatOpenAI({
+    modelName: process.env.OLLAMA_MODEL || "qwen3.5:9b",
+    configuration: {
+      baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
+    },
+    apiKey: "ollama",
+    temperature: 0.7,
+  }).bindTools(tools);
+}
 
-  if (lastMessage._getType() === "ai" && "tool_calls" in lastMessage && lastMessage.tool_calls?.length) {
-    return "tools";
+function createOpenRouterModel() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is not set. Add it to your .env file.");
+  }
+  return new ChatOpenAI({
+    modelName: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4",
+    configuration: {
+      baseURL: "https://openrouter.ai/api/v1",
+    },
+    apiKey,
+    temperature: 0.7,
+  }).bindTools(tools);
+}
+
+function getModel(provider: AIProvider) {
+  return provider === "openrouter" ? createOpenRouterModel() : createLocalModel();
+}
+
+function buildGraph(model: BaseChatModel) {
+  function shouldContinue(state: AgentState): "tools" | "end" {
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage._getType() === "ai" && "tool_calls" in lastMessage && lastMessage.tool_calls?.length) {
+      return "tools";
+    }
+    return "end";
   }
 
-  return "end";
-}
+  async function callModel(state: AgentState) {
+    const response = await model.invoke(state.messages);
+    return { messages: [response] };
+  }
 
-async function callModel(state: AgentState) {
-  const messages = state.messages;
-  const response = await model.invoke(messages);
-  return { messages: [response] };
-}
-
-const workflow = new StateGraph<AgentState>({
-  channels: {
-    messages: {
-      reducer: (x: BaseMessage[], y: BaseMessage[]) => x.concat(y),
+  const workflow = new StateGraph<AgentState>({
+    channels: {
+      messages: {
+        reducer: (x: BaseMessage[], y: BaseMessage[]) => x.concat(y),
+      },
     },
-  },
-});
+  });
 
-workflow.addNode("agent", callModel);
-workflow.addNode("tools", toolNode);
+  workflow.addNode("agent", callModel);
+  workflow.addNode("tools", toolNode);
+  workflow.addEdge(START, "agent");
+  workflow.addConditionalEdges("agent", shouldContinue);
+  workflow.addEdge("tools", "agent");
 
-workflow.addEdge(START, "agent");
-workflow.addConditionalEdges("agent", shouldContinue);
-workflow.addEdge("tools", "agent");
+  const checkpointer = new MemorySaver();
+  return workflow.compile({ checkpointer });
+}
 
-const checkpointer = new MemorySaver();
-const app = workflow.compile({ checkpointer });
+// Cache compiled graphs per provider
+const graphs: Record<string, ReturnType<typeof buildGraph>> = {};
+
+function getGraph(provider: AIProvider) {
+  if (!graphs[provider]) {
+    const model = getModel(provider);
+    graphs[provider] = buildGraph(model);
+  }
+  return graphs[provider];
+}
 
 const systemPrompt = `You are John Assistant, a helpful Siri-like desktop voice assistant. You provide quick, concise, and friendly responses.
 
@@ -117,8 +149,13 @@ When responding:
 
 You have access to tools for getting the time, date, creating focus plans, and providing agenda suggestions. Use them when appropriate.`;
 
-export async function processUserMessage(userMessage: string, threadId: string = "default"): Promise<string> {
-  const config = { configurable: { thread_id: threadId } };
+export async function processUserMessage(
+  userMessage: string,
+  provider: AIProvider = "local",
+  threadId: string = "default"
+): Promise<string> {
+  const app = getGraph(provider);
+  const config = { configurable: { thread_id: `${provider}-${threadId}` } };
 
   const state = await app.getState(config);
 

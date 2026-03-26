@@ -36,15 +36,21 @@
                     </button>
                 </div>
                 <div class="composer-actions">
-                    <button class="action-button" id="voice-button" type="button">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0v-4A2.5 2.5 0 0 0 8 1z" fill="currentColor"/><path d="M4 6.5a.5.5 0 0 0-1 0v1a5 5 0 0 0 4.5 4.975V14H6a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1H8.5v-1.525A5 5 0 0 0 13 7.5a.5.5 0 0 0-1 0 4 4 0 0 1-8 0z" fill="currentColor"/></svg>
-                    </button>
-                    <button class="action-button" id="toggle-speech" type="button">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a.5.5 0 0 1 .5.5v1.12a6.5 6.5 0 0 1 0 10.76v1.12a.5.5 0 0 1-1 0v-1.12a6.5 6.5 0 0 1 0-10.76V1.5A.5.5 0 0 1 8 1zm2.5 7a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0z" fill="currentColor"/></svg>
-                    </button>
-                    <button class="action-button" id="minimize-button" type="button">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    </button>
+                    <div class="provider-toggle" id="provider-toggle">
+                        <button class="provider-option active" data-provider="local" type="button">Local</button>
+                        <button class="provider-option" data-provider="openrouter" type="button">OpenRouter</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-button" id="voice-button" type="button">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0v-4A2.5 2.5 0 0 0 8 1z" fill="currentColor"/><path d="M4 6.5a.5.5 0 0 0-1 0v1a5 5 0 0 0 4.5 4.975V14H6a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1H8.5v-1.525A5 5 0 0 0 13 7.5a.5.5 0 0 0-1 0 4 4 0 0 1-8 0z" fill="currentColor"/></svg>
+                        </button>
+                        <button class="action-button" id="toggle-speech" type="button">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a.5.5 0 0 1 .5.5v1.12a6.5 6.5 0 0 1 0 10.76v1.12a.5.5 0 0 1-1 0v-1.12a6.5 6.5 0 0 1 0-10.76V1.5A.5.5 0 0 1 8 1zm2.5 7a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0z" fill="currentColor"/></svg>
+                        </button>
+                        <button class="action-button" id="minimize-button" type="button">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>

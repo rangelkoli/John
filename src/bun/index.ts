@@ -12,10 +12,10 @@ const initialY = display.workArea.y;
 const rpc = BrowserView.defineRPC<JohnRPCType>({
 	handlers: {
 		requests: {
-			processMessage: async ({ message }) => {
+			processMessage: async ({ message, provider }) => {
 				try {
-					const response = await processUserMessage(message);
-					console.log("Agent response:", response);
+					const response = await processUserMessage(message, provider);
+					console.log(`Agent response (${provider}):`, response);
 					return { success: true, response };
 				} catch (error) {
 					console.error("Agent error:", error);

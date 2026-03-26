@@ -1,5 +1,5 @@
 import { Electroview } from "electrobun/view";
-import type { JohnRPCType } from "../shared/types";
+import type { JohnRPCType, AIProvider } from "../shared/types";
 
 const rpc = Electroview.defineRPC<JohnRPCType>({
 	handlers: {
@@ -17,6 +17,7 @@ type AssistantState = {
 	recognitionActive: boolean;
 	voicesLoaded: boolean;
 	isExpanded: boolean;
+	provider: AIProvider;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognition;
@@ -39,6 +40,7 @@ const minimizeButton = document.querySelector<HTMLButtonElement>("#minimize-butt
 const voiceStatus = document.querySelector<HTMLParagraphElement>("#voice-status");
 const speechStatus = document.querySelector<HTMLParagraphElement>("#speech-status");
 const suggestionButtons = document.querySelectorAll<HTMLButtonElement>(".suggestion-chip");
+const providerButtons = document.querySelectorAll<HTMLButtonElement>(".provider-option");
 
 if (!appShell || !orbContainer || !conversation || !composer || !promptInput || !voiceButton || !toggleSpeechButton || !minimizeButton || !voiceStatus || !speechStatus) {
 	throw new Error("Main assistant UI failed to initialize.");
@@ -49,6 +51,7 @@ const state: AssistantState = {
 	recognitionActive: false,
 	voicesLoaded: false,
 	isExpanded: false,
+	provider: "local",
 };
 
 const SpeechRecognitionImpl = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -117,6 +120,16 @@ suggestionButtons.forEach((button) => {
 		const prompt = button.dataset.prompt?.trim();
 		if (!prompt) return;
 		handlePrompt(prompt);
+	});
+});
+
+providerButtons.forEach((button) => {
+	button.addEventListener("click", () => {
+		const provider = button.dataset.provider as AIProvider;
+		if (!provider) return;
+		state.provider = provider;
+		providerButtons.forEach((b) => b.classList.remove("active"));
+		button.classList.add("active");
 	});
 });
 
@@ -190,7 +203,7 @@ async function handlePrompt(prompt: string) {
 
 	try {
 		console.log("Sending message to agent:", prompt);
-		const result = await electroview.rpc.request.processMessage({ message: prompt });
+		const result = await electroview.rpc.request.processMessage({ message: prompt, provider: state.provider });
 		console.log("Agent result:", JSON.stringify(result));
 
 		removeThinking();
