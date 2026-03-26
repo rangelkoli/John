@@ -2,10 +2,27 @@ import { Electroview } from "electrobun/view";
 import type { JohnRPCType, AIProvider } from "../shared/types";
 
 const rpc = Electroview.defineRPC<JohnRPCType>({
-	maxRequestTime: 120_000, // 2 minutes — LLM calls can take a while
+	maxRequestTime: 120_000,
 	handlers: {
 		requests: {},
-		messages: {},
+		messages: {
+			// Bun detected the wake word — expand UI, show listening state
+			wakeWordDetected: () => {
+				console.log("Wake word detected!");
+				onWakeWordDetected();
+			},
+
+			// Bun captured the spoken command — process it
+			commandCaptured: ({ text }) => {
+				console.log("Command captured:", text);
+				onCommandCaptured(text);
+			},
+
+			// Status updates from the wake listener
+			wakeStatus: ({ message }) => {
+				updateVoiceStatus(message);
+			},
+		},
 	},
 });
 
@@ -15,20 +32,12 @@ type MessageRole = "user" | "assistant";
 
 type AssistantState = {
 	speechEnabled: boolean;
-	recognitionActive: boolean;
 	voicesLoaded: boolean;
 	isExpanded: boolean;
 	provider: AIProvider;
+	waitingForCommand: boolean;
+	processing: boolean;
 };
-
-type SpeechRecognitionCtor = new () => SpeechRecognition;
-
-declare global {
-	interface Window {
-		webkitSpeechRecognition?: SpeechRecognitionCtor;
-		SpeechRecognition?: SpeechRecognitionCtor;
-	}
-}
 
 const appShell = document.querySelector<HTMLElement>(".app-shell");
 const orbContainer = document.querySelector<HTMLElement>(".orb-container");
@@ -49,27 +58,74 @@ if (!appShell || !orbContainer || !conversation || !composer || !promptInput || 
 
 const state: AssistantState = {
 	speechEnabled: true,
-	recognitionActive: false,
 	voicesLoaded: false,
 	isExpanded: false,
 	provider: "local",
+	waitingForCommand: false,
+	processing: false,
 };
 
-const SpeechRecognitionImpl = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-const recognition = SpeechRecognitionImpl ? new SpeechRecognitionImpl() : null;
-
-if (recognition) {
-	recognition.lang = "en-US";
-	recognition.interimResults = false;
-	recognition.maxAlternatives = 1;
-}
-
-addMessage("assistant", "Hello, I'm John. Ask me anything.");
+addMessage("assistant", "Hello, I'm John. Say \"Hey John\" or type anything.");
 syncSpeechButton();
 
 window.speechSynthesis.onvoiceschanged = () => {
 	state.voicesLoaded = true;
 };
+
+// ─── Wake Word Activation (from Bun) ───
+
+async function onWakeWordDetected() {
+	if (state.processing) return;
+
+	// Play activation chime
+	playActivationSound();
+
+	// Expand the UI
+	if (!state.isExpanded) {
+		await expandUI();
+		await sleep(300);
+	}
+
+	// Show listening state
+	state.waitingForCommand = true;
+	orbContainer.classList.add("wake-active");
+	voiceButton.classList.add("listening");
+	updateVoiceStatus("Listening...");
+}
+
+async function onCommandCaptured(text: string) {
+	state.waitingForCommand = false;
+	voiceButton.classList.remove("listening");
+	orbContainer.classList.remove("wake-active");
+	updateVoiceStatus("");
+
+	// Process the command
+	await handlePrompt(text);
+}
+
+function playActivationSound() {
+	try {
+		const ctx = new AudioContext();
+		const osc = ctx.createOscillator();
+		const gain = ctx.createGain();
+		osc.connect(gain);
+		gain.connect(ctx.destination);
+		osc.frequency.setValueAtTime(800, ctx.currentTime);
+		osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.08);
+		gain.gain.setValueAtTime(0.15, ctx.currentTime);
+		gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+		osc.start(ctx.currentTime);
+		osc.stop(ctx.currentTime + 0.2);
+	} catch {
+		// Audio not available
+	}
+}
+
+function updateVoiceStatus(text: string) {
+	if (voiceStatus) voiceStatus.textContent = text;
+}
+
+// ─── Form & Button Handlers ───
 
 composer.addEventListener("submit", (event) => {
 	event.preventDefault();
@@ -93,19 +149,8 @@ promptInput.addEventListener("keydown", (event) => {
 });
 
 voiceButton.addEventListener("click", () => {
-	if (!recognition) {
-		addMessage("assistant", "Voice input is not available in this webview. You can still type your requests.");
-		return;
-	}
-
-	if (state.recognitionActive) {
-		recognition.stop();
-		return;
-	}
-
-	recognition.start();
-	state.recognitionActive = true;
-	syncVoiceButton();
+	// Manual voice button — show a hint since wake word is always on
+	addMessage("assistant", "Just say \"Hey John\" and then your question. I'm always listening!");
 });
 
 toggleSpeechButton.addEventListener("click", () => {
@@ -144,6 +189,8 @@ minimizeButton.addEventListener("click", () => {
 	collapseUI();
 });
 
+// ─── UI expand / collapse ───
+
 async function expandUI() {
 	state.isExpanded = true;
 	appShell.classList.remove("collapsed");
@@ -174,25 +221,11 @@ async function collapseUI() {
 	}
 }
 
-if (recognition) {
-	recognition.addEventListener("result", (event) => {
-		const spokenPrompt = event.results[0]?.[0]?.transcript?.trim();
-		if (!spokenPrompt) return;
-		handlePrompt(spokenPrompt);
-	});
-
-	recognition.addEventListener("end", () => {
-		state.recognitionActive = false;
-		syncVoiceButton();
-	});
-
-	recognition.addEventListener("error", () => {
-		state.recognitionActive = false;
-		syncVoiceButton();
-	});
-}
+// ─── Core prompt handler ───
 
 async function handlePrompt(prompt: string) {
+	state.processing = true;
+
 	if (!state.isExpanded) {
 		expandUI();
 		await sleep(300);
@@ -211,13 +244,20 @@ async function handlePrompt(prompt: string) {
 
 		if (result.success && result.response) {
 			addMessage("assistant", result.response);
-			speak(result.response);
+			// Speak the response, then tell Bun we're done so it resumes wake listening
+			speak(result.response, () => {
+				state.processing = false;
+				electroview.rpc.send.commandHandled({});
+			});
 		} else {
 			const errorMsg = result.error?.includes("Ollama")
 				? result.error
 				: result.error || "Sorry, I couldn't process that. Please try again.";
 			addMessage("assistant", errorMsg);
-			speak(errorMsg);
+			speak(errorMsg, () => {
+				state.processing = false;
+				electroview.rpc.send.commandHandled({});
+			});
 		}
 	} catch (error) {
 		console.error("RPC error:", error);
@@ -228,9 +268,14 @@ async function handlePrompt(prompt: string) {
 			? "The request took too long. Please try again."
 			: "Sorry, I'm having trouble connecting to the AI agent.";
 		addMessage("assistant", errorMsg);
-		speak(errorMsg);
+		speak(errorMsg, () => {
+			state.processing = false;
+			electroview.rpc.send.commandHandled({});
+		});
 	}
 }
+
+// ─── UI helpers ───
 
 function addMessage(role: MessageRole, content: string) {
 	const article = document.createElement("article");
@@ -283,8 +328,11 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function speak(message: string) {
-	if (!state.speechEnabled) return;
+function speak(message: string, onDone?: () => void) {
+	if (!state.speechEnabled) {
+		onDone?.();
+		return;
+	}
 
 	window.speechSynthesis.cancel();
 	const utterance = new SpeechSynthesisUtterance(message);
@@ -294,6 +342,11 @@ function speak(message: string) {
 
 	const selectedVoice = pickVoice();
 	if (selectedVoice) utterance.voice = selectedVoice;
+
+	if (onDone) {
+		utterance.onend = () => onDone();
+		utterance.onerror = () => onDone();
+	}
 
 	window.speechSynthesis.speak(utterance);
 }
@@ -309,7 +362,7 @@ function pickVoice() {
 }
 
 function syncVoiceButton() {
-	if (state.recognitionActive) {
+	if (state.waitingForCommand) {
 		voiceButton.classList.add("listening");
 	} else {
 		voiceButton.classList.remove("listening");

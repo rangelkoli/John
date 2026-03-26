@@ -1,5 +1,6 @@
 import { BrowserWindow, BrowserView, Screen } from "electrobun/bun";
 import { processUserMessage } from "./agent";
+import { WakeWordListener } from "./wake-listener";
 import type { JohnRPCType } from "../shared/types";
 
 let mainWindow: BrowserWindow;
@@ -10,7 +11,7 @@ const initialX = display.workArea.x + display.workArea.width - initialWidth;
 const initialY = display.workArea.y;
 
 const rpc = BrowserView.defineRPC<JohnRPCType>({
-	maxRequestTime: 120_000, // 2 minutes — LLM calls can take a while
+	maxRequestTime: 120_000,
 	handlers: {
 		requests: {
 			processMessage: async ({ message, provider }) => {
@@ -33,9 +34,51 @@ const rpc = BrowserView.defineRPC<JohnRPCType>({
 				}
 			},
 		},
-		messages: {},
+		messages: {
+			// Webview tells us it's done speaking / handling a command
+			commandHandled: () => {
+				console.log("Command handled, resuming wake word listening");
+				wakeListener.resumeWakeListening();
+			},
+		},
 	},
 });
+
+// ─── Wake Word Listener ───
+
+const wakeListener = new WakeWordListener((event) => {
+	switch (event.type) {
+		case "wake":
+			console.log("Wake word detected! Activating...");
+			// Tell the webview to expand and show listening state
+			rpc.send.wakeWordDetected({});
+			// Switch to command capture mode
+			wakeListener.listenForCommand();
+			break;
+
+		case "command":
+			console.log("Command captured:", event.text);
+			// Send the captured command to the webview
+			rpc.send.commandCaptured({ text: event.text });
+			break;
+
+		case "status":
+			rpc.send.wakeStatus({ message: event.message });
+			break;
+
+		case "error":
+			console.error("Wake listener error:", event.message);
+			break;
+	}
+});
+
+// Start the wake word listener
+wakeListener.start().catch((err) => {
+	console.error("Failed to start wake listener:", err);
+	console.log("Wake word detection will not be available. You can still use the app manually.");
+});
+
+// ─── Window ───
 
 mainWindow = new BrowserWindow({
 	title: "John Assistant",

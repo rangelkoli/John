@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.johnassistant.wake-listener</string>
+    <key>CFBundleName</key>
+    <string>wake-listener</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>John Assistant needs microphone access to listen for "Hey John" and voice commands.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>John Assistant uses speech recognition to understand your voice commands.</string>
+</dict>
+</plist>

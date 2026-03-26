@@ -468,6 +468,37 @@ button {
 	border: 0;
 }
 
+/* ── Wake Word Active State ── */
+.orb-container.wake-active .orb {
+	animation: wake-pulse 1s ease-in-out infinite;
+	background: linear-gradient(135deg, rgba(80, 200, 120, 0.4), rgba(120, 120, 255, 0.3));
+}
+
+.orb-container.wake-active .orb span:nth-child(1) {
+	background: linear-gradient(135deg, rgba(80, 200, 120, 0.5), rgba(120, 120, 255, 0.4));
+	animation: wake-ring 0.8s ease-in-out infinite;
+}
+
+.orb-container.wake-active .orb span:nth-child(2) {
+	border-color: rgba(80, 200, 120, 0.3);
+	animation: wake-ring 0.8s ease-in-out 0.15s infinite;
+}
+
+.orb-container.wake-active .orb span:nth-child(3) {
+	border-color: rgba(80, 200, 120, 0.2);
+	animation: wake-ring 0.8s ease-in-out 0.3s infinite;
+}
+
+@keyframes wake-pulse {
+	0%, 100% { transform: scale(1); box-shadow: 0 0 16px rgba(80, 200, 120, 0.2); }
+	50% { transform: scale(1.08); box-shadow: 0 0 32px rgba(80, 200, 120, 0.4); }
+}
+
+@keyframes wake-ring {
+	0%, 100% { transform: scale(1); opacity: 1; }
+	50% { transform: scale(1.08); opacity: 0.6; }
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*, *::before, *::after {
 		animation-duration: 0.01ms !important;

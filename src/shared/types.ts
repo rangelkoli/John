@@ -8,10 +8,16 @@ export type JohnRPCType = {
 			processMessage: { params: { message: string; provider: AIProvider }; response: { success: boolean; response: string; error: string } };
 			resizeWindow: { params: { width: number; height: number }; response: void };
 		};
-		messages: {};
+		messages: {
+			wakeWordDetected: {};
+			commandCaptured: { text: string };
+			wakeStatus: { message: string };
+		};
 	}>;
 	webview: RPCSchema<{
 		requests: {};
-		messages: {};
+		messages: {
+			commandHandled: {};
+		};
 	}>;
 };
