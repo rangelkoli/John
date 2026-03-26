@@ -3,6 +3,7 @@ import { join, dirname } from "node:path";
 
 type WakeListenerEvent =
   | { type: "wake" }
+  | { type: "sleep" }
   | { type: "command"; text: string }
   | { type: "status"; message: string }
   | { type: "error"; message: string };
@@ -10,6 +11,7 @@ type WakeListenerEvent =
 type EventCallback = (event: WakeListenerEvent) => void;
 
 const WAKE_PHRASES = ["hey john", "hey jon", "a john", "hey jan", "hey sean", "hey joe"];
+const SLEEP_PHRASES = ["bye john", "bye jon", "bye jan", "goodbye john", "goodbye jon"];
 
 export class WakeWordListener {
   private proc: ReturnType<typeof Bun.spawn> | null = null;
@@ -20,6 +22,7 @@ export class WakeWordListener {
   private commandBuffer = "";
   private commandTimeout: ReturnType<typeof setTimeout> | null = null;
   private lastTranscriptLength = 0;
+  private lastStatusMessage = "";
 
   constructor(callback: EventCallback) {
     this.callback = callback;
@@ -187,6 +190,10 @@ export class WakeWordListener {
     }
 
     if (event.type === "status") {
+      // Suppress duplicate status messages to avoid log spam
+      if (event.message === this.lastStatusMessage) return;
+      this.lastStatusMessage = event.message || "";
+
       console.log("Wake listener status:", event.message);
       if (event.message === "listening") {
         this.callback({ type: "status", message: "Listening for \"Hey John\"..." });
@@ -204,6 +211,15 @@ export class WakeWordListener {
       const text = (event.text || "").toLowerCase().trim();
 
       if (this.state === "wake-listening") {
+        // Check for sleep phrase
+        for (const phrase of SLEEP_PHRASES) {
+          if (text.includes(phrase)) {
+            console.log("Sleep phrase detected in:", text);
+            this.callback({ type: "sleep" });
+            return;
+          }
+        }
+
         // Check for wake phrase
         for (const phrase of WAKE_PHRASES) {
           if (text.includes(phrase)) {

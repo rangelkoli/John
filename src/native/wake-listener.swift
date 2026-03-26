@@ -19,6 +19,9 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var restartTimer: Timer?
     private let maxRecognitionDuration: TimeInterval = 55 // restart before 60s limit
+    private var hasEmittedInitialStatus = false
+    private var consecutiveQuickRestarts = 0
+    private var lastStartTime: Date = Date()
 
     override init() {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")) else {
@@ -73,7 +76,7 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
         // Use on-device recognition if available (lower latency, no network needed)
         if #available(macOS 13.0, *) {
             recognitionRequest.requiresOnDeviceRecognition = speechRecognizer.supportsOnDeviceRecognition
-            if speechRecognizer.supportsOnDeviceRecognition {
+            if speechRecognizer.supportsOnDeviceRecognition && !hasEmittedInitialStatus {
                 emit(type: "status", message: "Using on-device recognition")
             }
         }
@@ -113,10 +116,15 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
             self?.recognitionRequest?.append(buffer)
         }
 
+        lastStartTime = Date()
+
         do {
             audioEngine.prepare()
             try audioEngine.start()
-            emit(type: "status", message: "listening")
+            if !hasEmittedInitialStatus {
+                emit(type: "status", message: "listening")
+                hasEmittedInitialStatus = true
+            }
         } catch {
             emit(type: "error", message: "Audio engine failed: \(error.localizedDescription)")
             restartListening()
@@ -147,8 +155,20 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
 
     private func restartListening() {
         stopListening()
-        // Small delay before restart to avoid rapid cycling
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+
+        // Detect rapid restarts (session lasted < 2 seconds) and back off
+        let sessionDuration = Date().timeIntervalSince(lastStartTime)
+        let delay: TimeInterval
+        if sessionDuration < 2.0 {
+            consecutiveQuickRestarts += 1
+            // Exponential backoff: 1s, 2s, 4s, max 10s
+            delay = min(Double(1 << min(consecutiveQuickRestarts, 3)), 10.0)
+        } else {
+            consecutiveQuickRestarts = 0
+            delay = 0.3
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.startListening()
         }
     }

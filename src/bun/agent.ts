@@ -610,7 +610,7 @@ async function checkOllamaConnection(): Promise<void> {
 
 export async function processUserMessage(
   userMessage: string,
-  provider: AIProvider = "local",
+  provider: AIProvider = "openrouter",
   threadId: string = "default"
 ): Promise<string> {
   if (provider === "local") {

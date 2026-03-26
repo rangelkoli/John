@@ -12,6 +12,12 @@ const rpc = Electroview.defineRPC<JohnRPCType>({
 				onWakeWordDetected();
 			},
 
+			// Bun detected sleep phrase — collapse UI
+			sleepRequested: () => {
+				console.log("Sleep requested!");
+				onSleepRequested();
+			},
+
 			// Bun captured the spoken command — process it
 			commandCaptured: ({ text }) => {
 				console.log("Command captured:", text);
@@ -32,7 +38,6 @@ type MessageRole = "user" | "assistant";
 
 type AssistantState = {
 	speechEnabled: boolean;
-	voicesLoaded: boolean;
 	isExpanded: boolean;
 	provider: AIProvider;
 	waitingForCommand: boolean;
@@ -58,19 +63,14 @@ if (!appShell || !orbContainer || !conversation || !composer || !promptInput || 
 
 const state: AssistantState = {
 	speechEnabled: true,
-	voicesLoaded: false,
 	isExpanded: false,
-	provider: "local",
+	provider: "openrouter",
 	waitingForCommand: false,
 	processing: false,
 };
 
 addMessage("assistant", "Hello, I'm John. Say \"Hey John\" or type anything.");
 syncSpeechButton();
-
-window.speechSynthesis.onvoiceschanged = () => {
-	state.voicesLoaded = true;
-};
 
 // ─── Wake Word Activation (from Bun) ───
 
@@ -101,6 +101,21 @@ async function onCommandCaptured(text: string) {
 
 	// Process the command
 	await handlePrompt(text);
+}
+
+async function onSleepRequested() {
+	// Stop any ongoing speech or processing
+	stopSpeech();
+	state.processing = false;
+	state.waitingForCommand = false;
+	orbContainer.classList.remove("wake-active");
+	voiceButton.classList.remove("listening");
+	updateVoiceStatus("");
+
+	// Say goodbye then collapse
+	speak("Goodbye!", () => {
+		collapseUI();
+	});
 }
 
 function playActivationSound() {
@@ -156,7 +171,7 @@ voiceButton.addEventListener("click", () => {
 toggleSpeechButton.addEventListener("click", () => {
 	state.speechEnabled = !state.speechEnabled;
 	if (!state.speechEnabled) {
-		window.speechSynthesis.cancel();
+		stopSpeech();
 	}
 	syncSpeechButton();
 });
@@ -328,37 +343,54 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let currentAudio: HTMLAudioElement | null = null;
+
+function stopSpeech() {
+	if (currentAudio) {
+		currentAudio.pause();
+		currentAudio.src = "";
+		currentAudio = null;
+	}
+}
+
 function speak(message: string, onDone?: () => void) {
 	if (!state.speechEnabled) {
 		onDone?.();
 		return;
 	}
 
-	window.speechSynthesis.cancel();
-	const utterance = new SpeechSynthesisUtterance(message);
-	utterance.rate = 1;
-	utterance.pitch = 1.05;
-	utterance.volume = 1;
+	stopSpeech();
 
-	const selectedVoice = pickVoice();
-	if (selectedVoice) utterance.voice = selectedVoice;
+	electroview.rpc.request.generateSpeech({ text: message }).then((result) => {
+		if (!state.speechEnabled || !result.success) {
+			onDone?.();
+			return;
+		}
 
-	if (onDone) {
-		utterance.onend = () => onDone();
-		utterance.onerror = () => onDone();
-	}
+		const binaryStr = atob(result.audioBase64);
+		const bytes = new Uint8Array(binaryStr.length);
+		for (let i = 0; i < binaryStr.length; i++) {
+			bytes[i] = binaryStr.charCodeAt(i);
+		}
+		const blob = new Blob([bytes], { type: "audio/mp3" });
+		const url = URL.createObjectURL(blob);
 
-	window.speechSynthesis.speak(utterance);
-}
-
-function pickVoice() {
-	const voices = window.speechSynthesis.getVoices();
-	if (!voices.length) return null;
-
-	const preferredVoiceNames = ["Samantha", "Karen", "Daniel", "Google US English"];
-	return preferredVoiceNames
-		.map((name) => voices.find((voice) => voice.name === name))
-		.find(Boolean) ?? voices.find((voice) => voice.lang.startsWith("en")) ?? voices[0];
+		const audio = new Audio(url);
+		currentAudio = audio;
+		audio.addEventListener("ended", () => {
+			URL.revokeObjectURL(url);
+			currentAudio = null;
+			onDone?.();
+		});
+		audio.addEventListener("error", () => {
+			URL.revokeObjectURL(url);
+			currentAudio = null;
+			onDone?.();
+		});
+		audio.play();
+	}).catch(() => {
+		onDone?.();
+	});
 }
 
 function syncVoiceButton() {
