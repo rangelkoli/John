@@ -1,4 +1,4 @@
-import { ChatOllama } from "@langchain/ollama";
+import { ChatOpenAI } from "@langchain/openai";
 import { MemorySaver, START, StateGraph } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -56,12 +56,14 @@ const getAgenda = new DynamicStructuredTool({
 
 const tools = [getTime, getDate, getFocusPlan, getAgenda];
 
-const model = new ChatOllama({
-  model: process.env.OLLAMA_MODEL || "llama3.2",
-  baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+const model = new ChatOpenAI({
+  modelName: process.env.OLLAMA_MODEL || "qwen3.5:9b",
+  configuration: {
+    baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
+  },
+  apiKey: "ollama",
   temperature: 0.7,
 }).bindTools(tools);
-
 const toolNode = new ToolNode(tools);
 
 function shouldContinue(state: AgentState): "tools" | "end" {

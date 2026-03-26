@@ -4,8 +4,8 @@ import type { JohnRPCType } from "../shared/types";
 
 let mainWindow: BrowserWindow;
 const display = Screen.getPrimaryDisplay();
-const initialWidth = 140;
-const initialHeight = 140;
+const initialWidth = 100;
+const initialHeight = 100;
 const initialX = display.workArea.x + display.workArea.width - initialWidth;
 const initialY = display.workArea.y;
 
@@ -15,6 +15,7 @@ const rpc = BrowserView.defineRPC<JohnRPCType>({
 			processMessage: async ({ message }) => {
 				try {
 					const response = await processUserMessage(message);
+					console.log("Agent response:", response);
 					return { success: true, response };
 				} catch (error) {
 					console.error("Agent error:", error);

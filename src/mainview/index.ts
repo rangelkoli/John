@@ -29,7 +29,7 @@ declare global {
 }
 
 const appShell = document.querySelector<HTMLElement>(".app-shell");
-const heroPanel = document.querySelector<HTMLElement>(".hero-panel");
+const orbContainer = document.querySelector<HTMLElement>(".orb-container");
 const conversation = document.querySelector<HTMLDivElement>("#conversation");
 const composer = document.querySelector<HTMLFormElement>("#composer");
 const promptInput = document.querySelector<HTMLTextAreaElement>("#prompt-input");
@@ -40,7 +40,7 @@ const voiceStatus = document.querySelector<HTMLParagraphElement>("#voice-status"
 const speechStatus = document.querySelector<HTMLParagraphElement>("#speech-status");
 const suggestionButtons = document.querySelectorAll<HTMLButtonElement>(".suggestion-chip");
 
-if (!appShell || !heroPanel || !conversation || !composer || !promptInput || !voiceButton || !toggleSpeechButton || !minimizeButton || !voiceStatus || !speechStatus) {
+if (!appShell || !orbContainer || !conversation || !composer || !promptInput || !voiceButton || !toggleSpeechButton || !minimizeButton || !voiceStatus || !speechStatus) {
 	throw new Error("Main assistant UI failed to initialize.");
 }
 
@@ -60,8 +60,7 @@ if (recognition) {
 	recognition.maxAlternatives = 1;
 }
 
-addMessage("assistant", "Hello, I'm John Assistant. Ask me anything and I'll respond using AI.");
-setVoiceStatus(recognition ? "Ready to listen" : "Voice input unavailable in this webview");
+addMessage("assistant", "Hello, I'm John. Ask me anything.");
 syncSpeechButton();
 
 window.speechSynthesis.onvoiceschanged = () => {
@@ -71,23 +70,27 @@ window.speechSynthesis.onvoiceschanged = () => {
 composer.addEventListener("submit", (event) => {
 	event.preventDefault();
 	const prompt = promptInput.value.trim();
-	if (!prompt) {
-		return;
-	}
-
+	if (!prompt) return;
 	handlePrompt(prompt);
 	promptInput.value = "";
+	promptInput.style.height = "auto";
 });
 
 promptInput.addEventListener("input", () => {
 	promptInput.style.height = "auto";
-	promptInput.style.height = `${Math.min(promptInput.scrollHeight, 220)}px`;
+	promptInput.style.height = `${Math.min(promptInput.scrollHeight, 120)}px`;
+});
+
+promptInput.addEventListener("keydown", (event) => {
+	if (event.key === "Enter" && !event.shiftKey) {
+		event.preventDefault();
+		composer.requestSubmit();
+	}
 });
 
 voiceButton.addEventListener("click", () => {
 	if (!recognition) {
-		addMessage("assistant", "Voice input is not available here yet, but text-to-speech is ready. Type a prompt and I'll still respond out loud.");
-		setVoiceStatus("Voice input unavailable in this webview");
+		addMessage("assistant", "Voice input is not available in this webview. You can still type your requests.");
 		return;
 	}
 
@@ -98,7 +101,6 @@ voiceButton.addEventListener("click", () => {
 
 	recognition.start();
 	state.recognitionActive = true;
-	setVoiceStatus("Listening for your request");
 	syncVoiceButton();
 });
 
@@ -107,24 +109,18 @@ toggleSpeechButton.addEventListener("click", () => {
 	if (!state.speechEnabled) {
 		window.speechSynthesis.cancel();
 	}
-	setSpeechStatus(state.speechEnabled ? "Enabled" : "Muted");
-	toggleSpeechButton.textContent = state.speechEnabled ? "Mute voice" : "Enable voice";
+	syncSpeechButton();
 });
 
 suggestionButtons.forEach((button) => {
 	button.addEventListener("click", () => {
 		const prompt = button.dataset.prompt?.trim();
-		if (!prompt) {
-			return;
-		}
-
-		promptInput.value = prompt;
+		if (!prompt) return;
 		handlePrompt(prompt);
-		promptInput.value = "";
 	});
 });
 
-heroPanel.addEventListener("click", () => {
+orbContainer.addEventListener("click", () => {
 	if (!state.isExpanded) {
 		expandUI();
 	}
@@ -140,7 +136,7 @@ async function expandUI() {
 	appShell.classList.add("expanded");
 
 	try {
-		await electroview.rpc.request.resizeWindow({ width: 1280, height: 860 });
+		await electroview.rpc.request.resizeWindow({ width: 380, height: 600 });
 	} catch (error) {
 		console.error("Failed to resize window:", error);
 	}
@@ -152,13 +148,13 @@ async function collapseUI() {
 	appShell.classList.remove("expanded");
 	appShell.classList.add("collapsing");
 
-	await sleep(350);
+	await sleep(250);
 
 	appShell.classList.remove("collapsing");
 	appShell.classList.add("collapsed");
 
 	try {
-		await electroview.rpc.request.resizeWindow({ width: 140, height: 140 });
+		await electroview.rpc.request.resizeWindow({ width: 100, height: 100 });
 	} catch (error) {
 		console.error("Failed to resize window:", error);
 	}
@@ -167,24 +163,17 @@ async function collapseUI() {
 if (recognition) {
 	recognition.addEventListener("result", (event) => {
 		const spokenPrompt = event.results[0]?.[0]?.transcript?.trim();
-		if (!spokenPrompt) {
-			return;
-		}
-
-		promptInput.value = spokenPrompt;
+		if (!spokenPrompt) return;
 		handlePrompt(spokenPrompt);
-		promptInput.value = "";
 	});
 
 	recognition.addEventListener("end", () => {
 		state.recognitionActive = false;
-		setVoiceStatus("Ready to listen");
 		syncVoiceButton();
 	});
 
-	recognition.addEventListener("error", (event) => {
+	recognition.addEventListener("error", () => {
 		state.recognitionActive = false;
-		setVoiceStatus(formatRecognitionError(event.error));
 		syncVoiceButton();
 	});
 }
@@ -200,7 +189,9 @@ async function handlePrompt(prompt: string) {
 	showThinking();
 
 	try {
+		console.log("Sending message to agent:", prompt);
 		const result = await electroview.rpc.request.processMessage({ message: prompt });
+		console.log("Agent result:", JSON.stringify(result));
 
 		removeThinking();
 
@@ -208,7 +199,7 @@ async function handlePrompt(prompt: string) {
 			addMessage("assistant", result.response);
 			speak(result.response);
 		} else {
-			const errorMsg = "Sorry, I couldn't process that. Please make sure Ollama is running and try again.";
+			const errorMsg = "Sorry, I couldn't process that. Please make sure Ollama is running.";
 			addMessage("assistant", errorMsg);
 			speak(errorMsg);
 		}
@@ -216,7 +207,7 @@ async function handlePrompt(prompt: string) {
 		console.error("RPC error:", error);
 		removeThinking();
 
-		const errorMsg = "Sorry, I'm having trouble connecting to the AI agent. Please check that Ollama is running.";
+		const errorMsg = "Sorry, I'm having trouble connecting to the AI agent.";
 		addMessage("assistant", errorMsg);
 		speak(errorMsg);
 	}
@@ -228,7 +219,7 @@ function addMessage(role: MessageRole, content: string) {
 
 	const meta = document.createElement("span");
 	meta.className = "message-meta";
-	meta.textContent = role === "assistant" ? "John Assistant" : "You";
+	meta.textContent = role === "assistant" ? "John" : "You";
 
 	const body = document.createElement("p");
 	body.textContent = content;
@@ -243,7 +234,6 @@ function showThinking() {
 	const thinking = document.createElement("div");
 	thinking.className = "thinking-indicator";
 	thinking.id = "thinking-indicator";
-	thinking.setAttribute("aria-label", "Assistant is thinking");
 
 	for (let i = 0; i < 3; i++) {
 		const dot = document.createElement("span");
@@ -259,18 +249,14 @@ function removeThinking() {
 	const thinking = document.getElementById("thinking-indicator");
 	if (thinking) {
 		thinking.style.opacity = "0";
-		thinking.style.transform = "translateY(-4px)";
-		thinking.style.transition = "opacity 0.2s ease, transform 0.2s ease";
-		setTimeout(() => thinking.remove(), 200);
+		thinking.style.transition = "opacity 0.15s ease";
+		setTimeout(() => thinking.remove(), 150);
 	}
 }
 
 function smoothScrollToBottom() {
 	requestAnimationFrame(() => {
-		conversation.scrollTo({
-			top: conversation.scrollHeight,
-			behavior: "smooth",
-		});
+		conversation.scrollTo({ top: conversation.scrollHeight, behavior: "smooth" });
 	});
 }
 
@@ -278,11 +264,8 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 function speak(message: string) {
-	if (!state.speechEnabled) {
-		return;
-	}
+	if (!state.speechEnabled) return;
 
 	window.speechSynthesis.cancel();
 	const utterance = new SpeechSynthesisUtterance(message);
@@ -291,18 +274,14 @@ function speak(message: string) {
 	utterance.volume = 1;
 
 	const selectedVoice = pickVoice();
-	if (selectedVoice) {
-		utterance.voice = selectedVoice;
-	}
+	if (selectedVoice) utterance.voice = selectedVoice;
 
 	window.speechSynthesis.speak(utterance);
 }
 
 function pickVoice() {
 	const voices = window.speechSynthesis.getVoices();
-	if (!voices.length) {
-		return null;
-	}
+	if (!voices.length) return null;
 
 	const preferredVoiceNames = ["Samantha", "Karen", "Daniel", "Google US English"];
 	return preferredVoiceNames
@@ -310,25 +289,7 @@ function pickVoice() {
 		.find(Boolean) ?? voices.find((voice) => voice.lang.startsWith("en")) ?? voices[0];
 }
 
-function setVoiceStatus(message: string) {
-	if (voiceStatus) {
-		voiceStatus.classList.add("status-value-changing");
-		voiceStatus.textContent = message;
-		setTimeout(() => voiceStatus.classList.remove("status-value-changing"), 500);
-	}
-}
-
-function setSpeechStatus(message: string) {
-	if (speechStatus) {
-		speechStatus.classList.add("status-value-changing");
-		speechStatus.textContent = message;
-		setTimeout(() => speechStatus.classList.remove("status-value-changing"), 500);
-	}
-}
-
 function syncVoiceButton() {
-	voiceButton.textContent = state.recognitionActive ? "Stop listening" : "Start listening";
-
 	if (state.recognitionActive) {
 		voiceButton.classList.add("listening");
 	} else {
@@ -337,19 +298,5 @@ function syncVoiceButton() {
 }
 
 function syncSpeechButton() {
-	toggleSpeechButton.textContent = state.speechEnabled ? "Mute voice" : "Enable voice";
-	setSpeechStatus(state.speechEnabled ? "Enabled" : "Muted");
 	syncVoiceButton();
-}
-
-function formatRecognitionError(error: string) {
-	if (error === "not-allowed") {
-		return "Microphone permission was denied";
-	}
-
-	if (error === "audio-capture") {
-		return "No microphone was detected";
-	}
-
-	return "Voice input ran into an issue";
 }

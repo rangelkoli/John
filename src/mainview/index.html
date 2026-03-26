@@ -9,61 +9,49 @@
 </head>
 <body>
     <main class="app-shell collapsed">
-        <section class="hero-panel" aria-label="Assistant overview">
-            <div class="hero-copy">
-                <p class="eyebrow">Desktop voice companion</p>
-                <h1>John Assistant</h1>
-                <p class="hero-text">A Siri-like assistant for quick answers, prompts, and spoken replies right on your desktop.</p>
-            </div>
-
-            <div class="status-card" aria-live="polite">
-                <div>
-                    <p class="card-label">Voice status</p>
-                    <p class="card-value" id="voice-status">Ready to listen</p>
-                </div>
-                <div>
-                    <p class="card-label">Speech output</p>
-                    <p class="card-value" id="speech-status">Enabled</p>
-                </div>
-            </div>
-
-            <div class="orb" aria-hidden="true">
+        <div class="orb-container drag-region" aria-hidden="true">
+            <div class="orb">
                 <span></span>
                 <span></span>
                 <span></span>
             </div>
-        </section>
+        </div>
 
-        <section class="assistant-panel" aria-label="Assistant chat interface">
-            <header class="assistant-header drag-region">
-                <div>
-                    <p class="panel-kicker">Conversation</p>
-                    <h2>Ask for help, a plan, or a quick answer</h2>
-                </div>
-                <div class="no-drag" style="display: flex; gap: 10px;">
-                    <button class="secondary-button" id="toggle-speech" type="button">Mute voice</button>
-                    <button class="secondary-button" id="minimize-button" type="button">Minimize</button>
-                </div>
-            </header>
-
+        <div class="content-area">
             <div class="conversation" id="conversation" aria-live="polite"></div>
 
             <div class="suggestions" aria-label="Suggested prompts">
                 <button class="suggestion-chip" type="button" data-prompt="What's on my agenda today?">Agenda</button>
                 <button class="suggestion-chip" type="button" data-prompt="Give me a focused work plan for the next hour.">Focus plan</button>
-                <button class="suggestion-chip" type="button" data-prompt="Tell me something encouraging.">Encouragement</button>
-                <button class="suggestion-chip" type="button" data-prompt="What time is it?">Current time</button>
+                <button class="suggestion-chip" type="button" data-prompt="Tell me something encouraging.">Encourage</button>
+                <button class="suggestion-chip" type="button" data-prompt="What time is it?">Time</button>
             </div>
 
             <form class="composer" id="composer">
                 <label class="sr-only" for="prompt-input">Message John Assistant</label>
-                <textarea id="prompt-input" rows="1" placeholder="Type a request for John Assistant"></textarea>
+                <div class="composer-row">
+                    <textarea id="prompt-input" rows="1" placeholder="Ask John anything..."></textarea>
+                    <button class="send-button" type="submit" aria-label="Send">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13V3l11 5-11 5z" fill="currentColor"/></svg>
+                    </button>
+                </div>
                 <div class="composer-actions">
-                    <button class="secondary-button" id="voice-button" type="button">Start listening</button>
-                    <button class="primary-button" type="submit">Send</button>
+                    <button class="action-button" id="voice-button" type="button">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0v-4A2.5 2.5 0 0 0 8 1z" fill="currentColor"/><path d="M4 6.5a.5.5 0 0 0-1 0v1a5 5 0 0 0 4.5 4.975V14H6a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1H8.5v-1.525A5 5 0 0 0 13 7.5a.5.5 0 0 0-1 0 4 4 0 0 1-8 0z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="action-button" id="toggle-speech" type="button">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1a.5.5 0 0 1 .5.5v1.12a6.5 6.5 0 0 1 0 10.76v1.12a.5.5 0 0 1-1 0v-1.12a6.5 6.5 0 0 1 0-10.76V1.5A.5.5 0 0 1 8 1zm2.5 7a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="action-button" id="minimize-button" type="button">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </button>
                 </div>
             </form>
-        </section>
+        </div>
     </main>
+
+    <!-- Hidden status elements for JS compatibility -->
+    <p id="voice-status" class="sr-only">Ready to listen</p>
+    <p id="speech-status" class="sr-only">Enabled</p>
 </body>
 </html>
