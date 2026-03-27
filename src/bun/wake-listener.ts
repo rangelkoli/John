@@ -5,6 +5,7 @@ type WakeListenerEvent =
   | { type: "wake" }
   | { type: "sleep" }
   | { type: "command"; text: string }
+  | { type: "command_audio"; path: string }
   | { type: "status"; message: string }
   | { type: "error"; message: string };
 
@@ -23,6 +24,7 @@ export class WakeWordListener {
   private commandTimeout: ReturnType<typeof setTimeout> | null = null;
   private lastTranscriptLength = 0;
   private lastStatusMessage = "";
+  private fallbackCommand = "";
 
   constructor(callback: EventCallback) {
     this.callback = callback;
@@ -65,18 +67,33 @@ export class WakeWordListener {
     }
   }
 
+  /** Send a command to the Swift process via stdin */
+  private sendCommand(cmd: string) {
+    if (this.proc?.stdin) {
+      const writer = this.proc.stdin.getWriter();
+      writer.write(new TextEncoder().encode(cmd + "\n"));
+      writer.releaseLock();
+    }
+  }
+
   /** Switch to command capture mode (called after wake word detected) */
   listenForCommand() {
     this.state = "command-listening";
     this.commandBuffer = "";
     this.lastTranscriptLength = 0;
 
+    // Tell Swift to start buffering audio for Whisper
+    this.sendCommand("start-capture");
+
     // Timeout: if no final transcript in 8 seconds, use what we have
     if (this.commandTimeout) clearTimeout(this.commandTimeout);
     this.commandTimeout = setTimeout(() => {
       if (this.state === "command-listening") {
+        // Stop audio capture — Swift will emit command_audio event
+        this.sendCommand("stop-capture");
+        // Fall back to Apple transcript if no audio file arrives
         if (this.commandBuffer.trim()) {
-          this.callback({ type: "command", text: this.commandBuffer.trim() });
+          this.fallbackCommand = this.commandBuffer.trim();
         }
         this.state = "wake-listening";
         this.commandBuffer = "";
@@ -130,6 +147,7 @@ export class WakeWordListener {
     this.proc = Bun.spawn([this.binaryPath], {
       stdout: "pipe",
       stderr: "pipe",
+      stdin: "pipe",
     });
 
     this.state = "wake-listening";
@@ -186,6 +204,14 @@ export class WakeWordListener {
       event = JSON.parse(line);
     } catch {
       console.log("Wake listener:", line);
+      return;
+    }
+
+    if (event.type === "command_audio") {
+      // Audio file from Swift — send to Whisper for transcription
+      console.log("Command audio captured:", event.path);
+      this.callback({ type: "command_audio", path: event.path });
+      this.fallbackCommand = "";
       return;
     }
 
@@ -247,15 +273,26 @@ export class WakeWordListener {
           this.commandBuffer = commandText.trim();
         }
 
-        // If this is a final result and we have command text, emit it
+        // If this is a final result, stop audio capture and wait for Whisper
         if (event.final && this.commandBuffer) {
           if (this.commandTimeout) {
             clearTimeout(this.commandTimeout);
             this.commandTimeout = null;
           }
-          this.callback({ type: "command", text: this.commandBuffer });
+          // Stop audio capture — Swift will emit command_audio with the WAV path
+          this.fallbackCommand = this.commandBuffer;
+          this.sendCommand("stop-capture");
           this.commandBuffer = "";
           // Don't change state here — caller will call resumeWakeListening()
+          // The command_audio event will trigger Whisper transcription
+          // If no audio file arrives within 2s, fall back to Apple transcript
+          setTimeout(() => {
+            if (this.fallbackCommand) {
+              console.log("No audio file received, falling back to Apple transcript");
+              this.callback({ type: "command", text: this.fallbackCommand });
+              this.fallbackCommand = "";
+            }
+          }, 2000);
         }
       }
     }

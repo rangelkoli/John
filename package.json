@@ -17,6 +17,7 @@
 		"deepagents": "^1.8.5",
 		"electrobun": "^1.16.0",
 		"langchain": "^1.2.37",
+		"marked": "^17.0.5",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {

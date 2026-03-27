@@ -23,6 +23,11 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
     private var consecutiveQuickRestarts = 0
     private var lastStartTime: Date = Date()
 
+    // Audio capture for command mode
+    private var isCapturingCommand = false
+    private var commandAudioBuffers: [AVAudioPCMBuffer] = []
+    private var commandAudioFormat: AVAudioFormat?
+
     override init() {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")) else {
             fatalError("Speech recognizer not available for en-US")
@@ -112,8 +117,22 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
         }
 
         // Install audio tap
+        commandAudioFormat = recordingFormat
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
+            // Buffer audio when capturing a command
+            if self?.isCapturingCommand == true {
+                // Copy the buffer since it gets reused
+                if let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) {
+                    copy.frameLength = buffer.frameLength
+                    if let src = buffer.floatChannelData, let dst = copy.floatChannelData {
+                        for ch in 0..<Int(buffer.format.channelCount) {
+                            memcpy(dst[ch], src[ch], Int(buffer.frameLength) * MemoryLayout<Float>.size)
+                        }
+                    }
+                    self?.commandAudioBuffers.append(copy)
+                }
+            }
         }
 
         lastStartTime = Date()
@@ -173,6 +192,43 @@ class WakeListener: NSObject, SFSpeechRecognitionTaskDelegate {
         }
     }
 
+    // MARK: - Command Audio Capture
+
+    func startCommandCapture() {
+        commandAudioBuffers = []
+        isCapturingCommand = true
+    }
+
+    func stopCommandCapture() -> String? {
+        isCapturingCommand = false
+        guard !commandAudioBuffers.isEmpty, let format = commandAudioFormat else {
+            commandAudioBuffers = []
+            return nil
+        }
+
+        let path = NSTemporaryDirectory() + "john-command-\(ProcessInfo.processInfo.globallyUniqueString).wav"
+        let url = URL(fileURLWithPath: path)
+
+        // Calculate total frame count
+        var totalFrames: AVAudioFrameCount = 0
+        for buf in commandAudioBuffers {
+            totalFrames += buf.frameLength
+        }
+
+        guard totalFrames > 0,
+              let outputFile = try? AVAudioFile(forWriting: url, settings: format.settings) else {
+            commandAudioBuffers = []
+            return nil
+        }
+
+        for buf in commandAudioBuffers {
+            try? outputFile.write(from: buf)
+        }
+
+        commandAudioBuffers = []
+        return path
+    }
+
     // MARK: - JSON Output
 
     private func emit(type: String, message: String) {
@@ -205,6 +261,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide from dock — we're a background helper
         NSApp.setActivationPolicy(.accessory)
         listener.start()
+
+        // Read commands from stdin on a background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            while let line = readLine() {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                DispatchQueue.main.async {
+                    self?.handleCommand(trimmed)
+                }
+            }
+        }
+    }
+
+    private func handleCommand(_ command: String) {
+        switch command {
+        case "start-capture":
+            listener.startCommandCapture()
+        case "stop-capture":
+            if let audioPath = listener.stopCommandCapture() {
+                // Emit the audio file path as JSON
+                let escaped = audioPath
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                let json = "{\"type\":\"command_audio\",\"path\":\"\(escaped)\"}"
+                print(json)
+                fflush(stdout)
+            }
+        default:
+            break
+        }
     }
 }
 

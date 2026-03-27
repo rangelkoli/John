@@ -1,5 +1,6 @@
 import { Electroview } from "electrobun/view";
 import type { JohnRPCType, AIProvider } from "../shared/types";
+import { marked } from "marked";
 
 const rpc = Electroview.defineRPC<JohnRPCType>({
 	maxRequestTime: 120_000,
@@ -300,9 +301,15 @@ function addMessage(role: MessageRole, content: string) {
 	meta.className = "message-meta";
 	meta.textContent = role === "assistant" ? "John" : "You";
 
-	const body = document.createElement("p");
-	body.textContent = content;
+	const body = document.createElement("div");
 	body.style.margin = "0";
+
+	if (role === "assistant") {
+		body.className = "markdown-body";
+		body.innerHTML = marked.parse(content, { async: false }) as string;
+	} else {
+		body.textContent = content;
+	}
 
 	article.append(meta, body);
 	conversation.append(article);
@@ -344,13 +351,26 @@ function sleep(ms: number): Promise<void> {
 }
 
 let currentAudio: HTMLAudioElement | null = null;
+let speechCancelToken = 0;
 
 function stopSpeech() {
+	speechCancelToken++;
 	if (currentAudio) {
 		currentAudio.pause();
 		currentAudio.src = "";
 		currentAudio = null;
 	}
+}
+
+function splitIntoSentences(text: string): string[] {
+	const sentences: string[] = [];
+	const regex = /[^.!?]*[.!?]+[\s]?|[^.!?]+$/g;
+	let match: RegExpExecArray | null;
+	while ((match = regex.exec(text)) !== null) {
+		const s = match[0].trim();
+		if (s) sentences.push(s);
+	}
+	return sentences.length > 0 ? sentences : [text];
 }
 
 function speak(message: string, onDone?: () => void) {
@@ -360,37 +380,51 @@ function speak(message: string, onDone?: () => void) {
 	}
 
 	stopSpeech();
+	const token = speechCancelToken;
 
-	electroview.rpc.request.generateSpeech({ text: message }).then((result) => {
-		if (!state.speechEnabled || !result.success) {
+	const sentences = splitIntoSentences(message);
+
+	// Fire TTS requests for all sentences in parallel so later ones are ready when needed
+	const ttsPromises = sentences.map((sentence) =>
+		electroview.rpc.request.generateSpeech({ text: sentence }).catch(() => null)
+	);
+
+	function playChunk(index: number) {
+		if (token !== speechCancelToken || !state.speechEnabled || index >= ttsPromises.length) {
+			currentAudio = null;
 			onDone?.();
 			return;
 		}
 
-		const binaryStr = atob(result.audioBase64);
-		const bytes = new Uint8Array(binaryStr.length);
-		for (let i = 0; i < binaryStr.length; i++) {
-			bytes[i] = binaryStr.charCodeAt(i);
-		}
-		const blob = new Blob([bytes], { type: "audio/mp3" });
-		const url = URL.createObjectURL(blob);
+		ttsPromises[index].then((result) => {
+			if (token !== speechCancelToken || !state.speechEnabled || !result || !result.success) {
+				playChunk(index + 1);
+				return;
+			}
 
-		const audio = new Audio(url);
-		currentAudio = audio;
-		audio.addEventListener("ended", () => {
-			URL.revokeObjectURL(url);
-			currentAudio = null;
-			onDone?.();
+			const binaryStr = atob(result.audioBase64);
+			const bytes = new Uint8Array(binaryStr.length);
+			for (let i = 0; i < binaryStr.length; i++) {
+				bytes[i] = binaryStr.charCodeAt(i);
+			}
+			const blob = new Blob([bytes], { type: "audio/mp3" });
+			const url = URL.createObjectURL(blob);
+
+			const audio = new Audio(url);
+			currentAudio = audio;
+			audio.addEventListener("ended", () => {
+				URL.revokeObjectURL(url);
+				playChunk(index + 1);
+			});
+			audio.addEventListener("error", () => {
+				URL.revokeObjectURL(url);
+				playChunk(index + 1);
+			});
+			audio.play();
 		});
-		audio.addEventListener("error", () => {
-			URL.revokeObjectURL(url);
-			currentAudio = null;
-			onDone?.();
-		});
-		audio.play();
-	}).catch(() => {
-		onDone?.();
-	});
+	}
+
+	playChunk(0);
 }
 
 function syncVoiceButton() {

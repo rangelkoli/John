@@ -2,9 +2,45 @@ import { BrowserWindow, BrowserView, Screen } from "electrobun/bun";
 import { processUserMessage } from "./agent";
 import type { JohnRPCType } from "../shared/types";
 
+import { readFileSync, unlinkSync } from "node:fs";
+
 const display = Screen.getPrimaryDisplay();
 const DAEMON_PORT = process.env.JOHN_DAEMON_PORT;
 const DAEMON_URL = DAEMON_PORT ? `http://127.0.0.1:${DAEMON_PORT}` : null;
+
+// ─── Whisper STT ───
+
+async function transcribeWithWhisper(audioPath: string): Promise<string> {
+	const apiKey = process.env.OPENAI_API_KEY;
+	if (!apiKey) {
+		throw new Error("OPENAI_API_KEY is not set");
+	}
+
+	const audioData = readFileSync(audioPath);
+	const formData = new FormData();
+	formData.append("file", new Blob([audioData], { type: "audio/wav" }), "command.wav");
+	formData.append("model", "whisper-1");
+	formData.append("language", "en");
+
+	const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+		method: "POST",
+		headers: {
+			"Authorization": `Bearer ${apiKey}`,
+		},
+		body: formData,
+	});
+
+	// Clean up temp file
+	try { unlinkSync(audioPath); } catch {}
+
+	if (!response.ok) {
+		const errBody = await response.text();
+		throw new Error(`Whisper API error ${response.status}: ${errBody}`);
+	}
+
+	const result = await response.json() as { text: string };
+	return result.text.trim();
+}
 
 // ─── RPC ───
 
@@ -44,8 +80,8 @@ const rpc = BrowserView.defineRPC<JohnRPCType>({
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify({
-							model: "tts-1",
-							voice: "nova",
+							model: "gpt-4o-mini-tts",
+							voice: "ballad",
 							input: text,
 							response_format: "mp3",
 						}),
@@ -142,6 +178,16 @@ if (DAEMON_URL) {
 					break;
 				case "command":
 					rpc.send.commandCaptured({ text: event.text });
+					break;
+				case "command_audio":
+					// Transcribe with Whisper, then send as command
+					transcribeWithWhisper(event.path).then((text) => {
+						console.log("Whisper transcription:", text);
+						if (text) rpc.send.commandCaptured({ text });
+					}).catch((err) => {
+						console.error("Whisper transcription failed:", err);
+						// Apple transcript fallback is handled by wake-listener timeout
+					});
 					break;
 				case "status":
 					rpc.send.wakeStatus({ message: event.message });
