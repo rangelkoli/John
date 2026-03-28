@@ -14,6 +14,9 @@ export type JohnRPCType = {
 			sleepRequested: {};
 			commandCaptured: { text: string };
 			wakeStatus: { message: string };
+			streamChunk: { text: string };
+			streamEnd: {};
+			streamError: { error: string };
 		};
 	}>;
 	webview: RPCSchema<{

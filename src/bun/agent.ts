@@ -647,3 +647,45 @@ export async function processUserMessage(
 
   return "";
 }
+
+export async function streamUserMessage(
+  userMessage: string,
+  onChunk: (text: string) => void,
+  provider: AIProvider = "openrouter",
+  threadId: string = "default"
+): Promise<string> {
+  if (provider === "local") {
+    await checkOllamaConnection();
+  }
+
+  const agent = getAgent(provider);
+  const config = { configurable: { thread_id: `${provider}-${threadId}` } };
+
+  let fullResponse = "";
+
+  const stream = await agent.stream(
+    { messages: [new HumanMessage(userMessage)] },
+    { ...config, streamMode: "messages" }
+  );
+
+  for await (const [message, metadata] of stream) {
+    // Only emit AI message chunks (not tool calls/results)
+    if (message._getType?.() === "ai" || message.constructor?.name === "AIMessageChunk") {
+      let text = "";
+      if (typeof message.content === "string") {
+        text = message.content;
+      } else if (Array.isArray(message.content)) {
+        text = message.content
+          .filter((block: any) => block.type === "text")
+          .map((block: any) => block.text)
+          .join("");
+      }
+      if (text) {
+        fullResponse += text;
+        onChunk(text);
+      }
+    }
+  }
+
+  return fullResponse || "I'm sorry, I didn't get a response. Please try again.";
+}

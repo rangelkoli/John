@@ -29,6 +29,17 @@ const rpc = Electroview.defineRPC<JohnRPCType>({
 			wakeStatus: ({ message }) => {
 				updateVoiceStatus(message);
 			},
+
+			// Streaming chunks from the AI
+			streamChunk: ({ text }) => {
+				onStreamChunk(text);
+			},
+			streamEnd: () => {
+				onStreamEnd();
+			},
+			streamError: ({ error }) => {
+				onStreamError(error);
+			},
 		},
 	},
 });
@@ -72,6 +83,49 @@ const state: AssistantState = {
 
 addMessage("assistant", "Hello, I'm John. Say \"Hey John\" or type anything.");
 syncSpeechButton();
+
+// ─── Streaming state ───
+
+let streamingBody: HTMLDivElement | null = null;
+let streamingContent = "";
+
+function onStreamChunk(text: string) {
+	streamingContent += text;
+
+	// Create the message element on first chunk
+	if (!streamingBody) {
+		removeThinking();
+
+		const article = document.createElement("article");
+		article.className = "message message-assistant";
+		article.id = "streaming-message";
+
+		const meta = document.createElement("span");
+		meta.className = "message-meta";
+		meta.textContent = "John";
+
+		streamingBody = document.createElement("div");
+		streamingBody.className = "markdown-body";
+		streamingBody.style.margin = "0";
+
+		article.append(meta, streamingBody);
+		conversation!.append(article);
+	}
+
+	streamingBody.innerHTML = marked.parse(streamingContent, { async: false }) as string;
+	smoothScrollToBottom();
+}
+
+function onStreamEnd() {
+	// Reset streaming state — the RPC response handler will speak the full response
+	streamingBody = null;
+	streamingContent = "";
+}
+
+function onStreamError(_error: string) {
+	streamingBody = null;
+	streamingContent = "";
+}
 
 // ─── Wake Word Activation (from Bun) ───
 
@@ -259,7 +313,13 @@ async function handlePrompt(prompt: string) {
 		removeThinking();
 
 		if (result.success && result.response) {
-			addMessage("assistant", result.response);
+			// If streaming already rendered the message, don't duplicate it
+			const existing = document.getElementById("streaming-message");
+			if (!existing) {
+				addMessage("assistant", result.response);
+			} else {
+				existing.removeAttribute("id");
+			}
 			// Speak the response, then tell Bun we're done so it resumes wake listening
 			speak(result.response, () => {
 				state.processing = false;

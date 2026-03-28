@@ -1,5 +1,5 @@
 import { BrowserWindow, BrowserView, Screen } from "electrobun/bun";
-import { processUserMessage } from "./agent";
+import { processUserMessage, streamUserMessage } from "./agent";
 import type { JohnRPCType } from "../shared/types";
 
 import { readFileSync, unlinkSync } from "node:fs";
@@ -50,12 +50,18 @@ const rpc = BrowserView.defineRPC<JohnRPCType>({
 		requests: {
 			processMessage: async ({ message, provider }) => {
 				try {
-					const response = await processUserMessage(message, provider);
+					const response = await streamUserMessage(
+						message,
+						(chunk) => rpc.send.streamChunk({ text: chunk }),
+						provider
+					);
+					rpc.send.streamEnd({});
 					console.log(`Agent response (${provider}):`, response);
 					return { success: true, response: String(response || ""), error: "" };
 				} catch (error) {
 					console.error("Agent error:", error);
 					const errorMessage = error instanceof Error ? error.message : String(error);
+					rpc.send.streamError({ error: errorMessage });
 					return { success: false, response: "", error: errorMessage };
 				}
 			},
