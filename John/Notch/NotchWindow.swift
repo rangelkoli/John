@@ -30,6 +30,13 @@ class NotchWindow: NSPanel {
     private var completion: (() -> Void)?
     private var isAnimating = false
     
+    // Content animation state
+    private var contentStartAlpha: CGFloat = 1
+    private var contentTargetAlpha: CGFloat = 1
+    private var contentStartScale: CGFloat = 1
+    private var contentTargetScale: CGFloat = 1
+    private var isContentAnimating = false
+    
     init(onHover: @escaping () -> Void, harness: AgentHarness? = nil) {
         self.onHover = onHover
         self.harness = harness
@@ -121,7 +128,7 @@ class NotchWindow: NSPanel {
     }
     
     private func tick() {
-        guard isAnimating else {
+        guard isAnimating || isContentAnimating else {
             stopAnimation()
             return
         }
@@ -129,23 +136,41 @@ class NotchWindow: NSPanel {
         let elapsed = CACurrentMediaTime() - animationStartTime
         let progress = min(elapsed / animationDuration, 1.0)
         
-        // Ultra smooth ease-out curve (no bounce)
-        let t = smoothStep(progress)
+        // Ultra smooth ease-out quint curve for deceleration
+        let t = easeOutQuint(progress)
         
-        let interpolated = NSRect(
-            x: startFrame.origin.x + (targetFrame.origin.x - startFrame.origin.x) * t,
-            y: startFrame.origin.y + (targetFrame.origin.y - startFrame.origin.y) * t,
-            width: startFrame.width + (targetFrame.width - startFrame.width) * t,
-            height: startFrame.height + (targetFrame.height - startFrame.height) * t
-        )
+        // Window frame interpolation with sub-pixel precision
+        if isAnimating {
+            let interpolated = NSRect(
+                x: startFrame.origin.x + (targetFrame.origin.x - startFrame.origin.x) * t,
+                y: startFrame.origin.y + (targetFrame.origin.y - startFrame.origin.y) * t,
+                width: startFrame.width + (targetFrame.width - startFrame.width) * t,
+                height: startFrame.height + (targetFrame.height - startFrame.height) * t
+            )
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.setFrame(interpolated, display: true)
+            }
+        }
         
-        DispatchQueue.main.async { [weak self] in
-            self?.setFrame(interpolated, display: true)
+        // Content animation interpolation (staggered, slightly behind frame)
+        if isContentAnimating {
+            let contentProgress = min((elapsed + 0.02) / animationDuration, 1.0)
+            let contentT = easeOutQuint(contentProgress)
+            
+            let alpha = contentStartAlpha + (contentTargetAlpha - contentStartAlpha) * CGFloat(contentT)
+            let scale = contentStartScale + (contentTargetScale - contentStartScale) * CGFloat(contentT)
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.pillContentHost?.alphaValue = alpha
+                self?.pillContentHost?.layer?.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
+            }
         }
         
         if progress >= 1.0 {
             DispatchQueue.main.async { [weak self] in
                 self?.isAnimating = false
+                self?.isContentAnimating = false
                 self?.stopAnimation()
                 self?.completion?()
                 self?.completion = nil
@@ -160,10 +185,35 @@ class NotchWindow: NSPanel {
         animationDisplayLink = nil
     }
     
-    // Smooth ease-out function (cubic bezier approximation)
+    // Ultra smooth ease-out quint: 1 - (1 - t)^5
+    // Provides a very smooth deceleration without spring/bounce
+    private func easeOutQuint(_ t: Double) -> Double {
+        let t1 = 1.0 - t
+        return 1.0 - t1 * t1 * t1 * t1 * t1
+    }
+    
+    // Alternative: ease-out-expo for even sharper deceleration
+    private func easeOutExpo(_ t: Double) -> Double {
+        return t == 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * t)
+    }
+    
+    // Custom content animation timing (slightly delayed for staggered effect)
+    private func animateContent(
+        fromAlpha: CGFloat = 1,
+        toAlpha: CGFloat = 1,
+        fromScale: CGFloat = 1,
+        toScale: CGFloat = 1
+    ) {
+        contentStartAlpha = pillContentHost?.alphaValue ?? 1
+        contentTargetAlpha = toAlpha
+        contentStartScale = 1.0 // Reset scale
+        contentTargetScale = toScale
+        isContentAnimating = true
+    }
+    
+    // Smooth step for backwards compatibility
     private func smoothStep(_ t: Double) -> Double {
-        // Smooth step: 3t² - 2t³ (very smooth, no overshoot)
-        return t * t * (3.0 - 2.0 * t)
+        return easeOutQuint(t)
     }
     
     // MARK: - Expand / Collapse
@@ -245,20 +295,19 @@ class NotchWindow: NSPanel {
             target = applyHoverGrow(to: target)
         }
         
+        // Prepare content animation (fade in + slight scale up)
+        animateContent(fromAlpha: 0.8, toAlpha: 1.0, fromScale: 0.95, toScale: 1.0)
         pillView.alphaValue = 1
-        pillContentHost?.alphaValue = 1
         
-        animateTo(target, duration: 0.5)
+        // Smooth expansion with optimized duration
+        animateTo(target, duration: 0.45)
     }
     
     private func collapseSmooth() {
         isExpanded = false
         
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.2
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.pillContentHost?.animator().alphaValue = 0
-        }
+        // Prepare content animation (fade out slightly)
+        animateContent(fromAlpha: 1.0, toAlpha: 0.85, fromScale: 1.0, toScale: 0.97)
         
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
@@ -274,8 +323,9 @@ class NotchWindow: NSPanel {
             target = applyHoverGrow(to: target)
         }
         
-        animateTo(target, duration: 0.4) { [weak self] in
-            self?.pillContentHost?.alphaValue = 1
+        // Smooth collapse with synchronized content restoration
+        animateTo(target, duration: 0.38) { [weak self] in
+            self?.animateContent(fromAlpha: 0.85, toAlpha: 1.0, fromScale: 0.97, toScale: 1.0)
         }
     }
     
@@ -376,13 +426,20 @@ class NotchWindow: NSPanel {
         pillView.isHovered = true
         pillContentHost?.rootView = NotchPillContent(isHovering: true, harness: harness)
         
+        // Slight scale effect on content during hover
+        animateContent(fromAlpha: 1.0, toAlpha: 1.0, fromScale: 1.0, toScale: 1.02)
+        
         let target = applyHoverGrow(to: frame)
-        animateTo(target, duration: 0.35)
+        // Faster, snappier hover animation with ease-out-quint
+        animateTo(target, duration: 0.28)
     }
     
     private func hoverShrinkSmooth() {
         pillView.isHovered = false
         pillContentHost?.rootView = NotchPillContent(isHovering: false, harness: harness)
+        
+        // Restore content scale
+        animateContent(fromAlpha: 1.0, toAlpha: 1.0, fromScale: 1.02, toScale: 1.0)
         
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
@@ -394,7 +451,8 @@ class NotchWindow: NSPanel {
             height: notchHeight
         )
         
-        animateTo(target, duration: 0.35)
+        // Smooth return with ease-out-quint
+        animateTo(target, duration: 0.32)
     }
     
     // MARK: - Observers
@@ -464,8 +522,9 @@ class NotchPillView: NSView {
         let animation = CABasicAnimation(keyPath: "path")
         animation.fromValue = fromPath
         animation.toValue = toPath
-        animation.duration = 0.35
-        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        animation.duration = 0.32
+        // Ultra smooth ease-out-quint curve for shape morphing
+        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
         
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -481,8 +540,9 @@ class NotchPillView: NSView {
             let animation = CABasicAnimation(keyPath: "path")
             animation.fromValue = shapeLayer.path
             animation.toValue = path
-            animation.duration = 0.35
-            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animation.duration = 0.32
+            // Ultra smooth ease-out-quint curve
+            animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
             shapeLayer.add(animation, forKey: "pathMorph")
         }
         

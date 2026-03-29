@@ -28,27 +28,42 @@ struct NotchPillContent: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.green)
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     case .waitingForInput:
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.yellow)
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     case .thinking:
                         SpinnerView()
                             .frame(width: 14, height: 14)
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     case .idle:
                         EmptyView()
                     case .error:
                         Image(systemName: "xmark.octagon.fill")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.red)
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: displayStatus)
+            .animation(
+                .timingCurve(0.23, 1, 0.32, 1, duration: 0.35),
+                value: displayStatus
+            )
             .padding(.horizontal, 12 + (isHovering ? NotchPillView.earRadius : 0))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

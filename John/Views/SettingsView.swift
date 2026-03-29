@@ -30,9 +30,13 @@ struct SettingsView: View {
                         .foregroundColor(harness.apiKeySource == "Not Set" ? .red : .green)
                     
                     if harness.apiKeySource == "Environment" {
-                        Text("(\(EnvManager.getEnvFilePath().lastPathComponent))")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        if let foundPath = EnvManager.getFoundEnvPath() {
+                            Text("(\(foundPath))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
                     }
                 }
                 

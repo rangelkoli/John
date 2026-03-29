@@ -4,36 +4,64 @@ enum EnvManager {
     private static let envFileName = ".john.env"
     
     static func loadAPIKey() -> String? {
-        // First check environment variable (for development)
+        // First check environment variable (for development/CI)
         if let envKey = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"], !envKey.isEmpty {
             return envKey
         }
         
-        // Then check .john.env in home directory
-        let homeEnvPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(envFileName)
+        // Search paths in order of priority
+        let searchPaths = getSearchPaths()
         
-        if let key = loadEnvFile(at: homeEnvPath) {
-            return key
-        }
-        
-        // Then check .john.env in app directory
-        if let appPath = Bundle.main.resourceURL?.deletingLastPathComponent() {
-            let appEnvPath = appPath.appendingPathComponent(envFileName)
-            if let key = loadEnvFile(at: appEnvPath) {
+        for path in searchPaths {
+            if let key = loadEnvFile(at: path) {
                 return key
             }
         }
         
-        // Check current working directory (for development)
-        let cwdEnvPath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent(envFileName)
+        return nil
+    }
+    
+    private static func getSearchPaths() -> [URL] {
+        var paths: [URL] = []
         
-        if let key = loadEnvFile(at: cwdEnvPath) {
-            return key
+        // 1. Home directory (standard location for config files)
+        paths.append(FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(envFileName))
+        
+        // 2. Current working directory (for development)
+        paths.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(envFileName))
+        
+        // 3. App bundle resource directory
+        if let resourcePath = Bundle.main.resourcePath {
+            paths.append(URL(fileURLWithPath: resourcePath)
+                .appendingPathComponent(envFileName))
         }
         
-        return nil
+        // 4. App bundle containing directory (for dev builds)
+        let bundleParent = Bundle.main.bundleURL.deletingLastPathComponent()
+        paths.append(bundleParent.appendingPathComponent(envFileName))
+        
+        // 5. App executable directory
+        if let executableURL = Bundle.main.executableURL {
+            paths.append(executableURL.deletingLastPathComponent().appendingPathComponent(envFileName))
+        }
+        
+        // 6. Project directory (when running from Xcode)
+        #if DEBUG
+        // Xcode sets this to the built products directory, go up to find project
+        if let buildDir = Bundle.main.resourceURL?.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() {
+            paths.append(buildDir.appendingPathComponent(envFileName))
+            paths.append(buildDir.deletingLastPathComponent().appendingPathComponent(envFileName))
+        }
+        #endif
+        
+        // 7. Common development locations
+        let projectRoot = URL(fileURLWithPath: "/Volumes/RANGEL/john")
+        paths.append(projectRoot.appendingPathComponent(envFileName))
+        paths.append(projectRoot.appendingPathComponent("John").appendingPathComponent(envFileName))
+        
+        return paths
     }
     
     private static func loadEnvFile(at url: URL) -> String? {
@@ -81,5 +109,16 @@ enum EnvManager {
     static func envFileExists() -> Bool {
         let envPath = getEnvFilePath()
         return FileManager.default.isReadableFile(atPath: envPath.path)
+    }
+    
+    static func getFoundEnvPath() -> String? {
+        for path in getSearchPaths() {
+            if FileManager.default.isReadableFile(atPath: path.path) {
+                if loadEnvFile(at: path) != nil {
+                    return path.path
+                }
+            }
+        }
+        return nil
     }
 }
