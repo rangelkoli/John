@@ -84,11 +84,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agentPanel.setNotchWindow(notchWindow!)
     }
     
-    private func setupHotkey() {
+private func setupHotkey() {
+        // Shift-Command-Space to toggle panel
         hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == 50 else { return }
-            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.function).isEmpty else { return }
-            DispatchQueue.main.async { self?.togglePanel() }
+            // Space key code is 49
+            guard event.keyCode == 49 else { return }
+            // Check for Command + Shift
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard modifiers.contains(.command) && modifiers.contains(.shift) else { return }
+            // Ensure no other modifiers
+            guard modifiers.isSubset(of: [.command, .shift]) else { return }
+            
+            DispatchQueue.main.async { self?.togglePanelAndFocus() }
+        }
+    }
+    
+    private func togglePanelAndFocus() {
+        if agentPanel.isVisible {
+            agentPanel.hidePanel()
+            notchWindow?.endHover()
+            panelOpenedViaHover = false
+            stopHoverTracking()
+        } else {
+            panelOpenedViaHover = false
+            showPanelBelowStatusItem()
+            // Focus on input after panel is shown
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.agentPanel.focusInput()
+            }
         }
     }
     
@@ -201,18 +224,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         showContextMenu()
-    }
-    
-    private func togglePanel() {
-        if agentPanel.isVisible {
-            agentPanel.hidePanel()
-            notchWindow?.endHover()
-            panelOpenedViaHover = false
-            stopHoverTracking()
-        } else {
-            panelOpenedViaHover = false
-            showPanelBelowStatusItem()
-        }
     }
     
     private func showContextMenu() {

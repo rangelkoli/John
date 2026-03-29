@@ -34,7 +34,7 @@ if [ -d "$APP_PATH" ]; then
     echo "✨ John is now running!"
     echo ""
     echo "📋 Quick Tips:"
-    echo "   • Press backtick (\`) to toggle the panel"
+    echo "   • Press Shift-Command-Space to toggle the panel and focus input"
     echo "   • Hover over the notch to reveal the panel"
     echo "   • Click the brain icon in the menu bar"
     echo "   • Press Cmd+, for Settings (API Key)"

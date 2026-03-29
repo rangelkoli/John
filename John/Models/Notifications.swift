@@ -4,4 +4,5 @@ extension Notification.Name {
     static let JohnStatusChanged = Notification.Name("JohnStatusChanged")
     static let ShowSettings = Notification.Name("ShowSettings")
     static let HidePanel = Notification.Name("HidePanel")
+    static let FocusInput = Notification.Name("FocusInput")
 }

@@ -27,6 +27,9 @@ struct ChatView: View {
         } message: {
             Text(errorMessage ?? "An error occurred")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .FocusInput)) { _ in
+            isInputFocused = true
+        }
     }
     
     private var messagesList: some View {

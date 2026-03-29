@@ -87,6 +87,12 @@ class AgentPanel: NSPanel {
         orderOut(nil)
     }
     
+    func focusInput() {
+        makeKeyAndOrderFront(nil)
+        // Post notification to focus input
+        NotificationCenter.default.post(name: .FocusInput, object: nil)
+    }
+    
     @objc private func windowDidBecomeKey(_ notification: Notification) {
         alphaValue = 1.0
     }
