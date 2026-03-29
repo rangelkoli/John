@@ -5,4 +5,5 @@ extension Notification.Name {
     static let ShowSettings = Notification.Name("ShowSettings")
     static let HidePanel = Notification.Name("HidePanel")
     static let FocusInput = Notification.Name("FocusInput")
+    static let TogglePanel = Notification.Name("TogglePanel")
 }

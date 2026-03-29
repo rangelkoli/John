@@ -309,6 +309,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func windowDidResignKey(_ notification: Notification) {
         guard !panelOpenedViaHover else { return }
         notchWindow?.endHover()
+        notchWindow?.setPanelOpen(false)
         stopHoverTracking()
     }
     
@@ -317,5 +318,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panelOpenedViaHover = false
             stopHoverTracking()
         }
+        notchWindow?.setPanelOpen(true)
     }
 }

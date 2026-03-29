@@ -17,6 +17,11 @@ class NotchWindow: NSPanel {
     private var isExpanded = false
     private var collapseDebounceTimer: Timer?
     private var isHovered = false
+    private var isPanelOpen = false {
+        didSet {
+            updatePillContent()
+        }
+    }
     
     private let pillView = NotchPillView()
     private var pillContentHost: NSHostingView<NotchPillContent>?
@@ -67,6 +72,7 @@ class NotchWindow: NSPanel {
         setupTracking()
         observeScreenChanges()
         observeStatusChanges()
+        observeToggleNotification()
     }
     
     private func setupPillView() {
@@ -79,7 +85,16 @@ class NotchWindow: NSPanel {
         cv.wantsLayer = true
         cv.layer?.masksToBounds = false
         
-        let hostView = NSHostingView(rootView: NotchPillContent(harness: harness))
+        updatePillContent()
+    }
+    
+    private func updatePillContent() {
+        guard let cv = contentView else { return }
+        
+        // Remove existing host view if any
+        pillContentHost?.removeFromSuperview()
+        
+        let hostView = NSHostingView(rootView: NotchPillContent(isHovering: isHovered, harness: harness, isPanelOpen: isPanelOpen))
         hostView.frame = cv.bounds
         hostView.autoresizingMask = [.width, .height]
         hostView.alphaValue = 1
@@ -89,12 +104,29 @@ class NotchWindow: NSPanel {
         pillContentHost = hostView
     }
     
+    private var toggleObserver: Any?
+    
     deinit {
         stopAnimation()
         if let monitor = mouseMonitor { NSEvent.removeMonitor(monitor) }
         if let monitor = localMouseMonitor { NSEvent.removeMonitor(monitor) }
         if let observer = screenObserver { NotificationCenter.default.removeObserver(observer) }
         if let observer = statusObserver { NotificationCenter.default.removeObserver(observer) }
+        if let observer = toggleObserver { NotificationCenter.default.removeObserver(observer) }
+    }
+    
+    func setPanelOpen(_ open: Bool) {
+        isPanelOpen = open
+    }
+    
+    private func observeToggleNotification() {
+        toggleObserver = NotificationCenter.default.addObserver(
+            forName: .TogglePanel,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onHover?()
+        }
     }
     
     // MARK: - Smooth Animation System
