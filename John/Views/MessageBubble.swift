@@ -4,59 +4,92 @@ struct MessageBubble: View {
     let message: Message
     
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
             if message.role == .assistant {
-                Spacer(minLength: 40)
+                Spacer(minLength: 60)
             } else {
                 userAvatar
             }
             
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
                 if message.role == .assistant {
                     assistantHeader
                 }
                 
                 if message.role == .assistant {
-                    // Render markdown for assistant messages
                     MarkdownText(content: message.content)
                         .textSelection(.enabled)
-                        .font(.system(size: 14, weight: .regular, design: .default))
-                        .lineSpacing(3)
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .lineSpacing(4)
                         .foregroundColor(.primary)
-                        .padding(.horizontal, 2)
+                        .padding(.horizontal, 4)
                 } else {
-                    // Plain text for user messages
                     Text(message.content)
                         .textSelection(.enabled)
-                        .font(.system(size: 14, weight: .regular, design: .default))
-                        .lineSpacing(3)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .lineSpacing(4)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 2)
+                        .padding(.horizontal, 4)
                 }
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
-            .background(bubbleBackground)
-            .cornerRadius(18, corners: message.role == .user ? [.topLeft, .topRight, .bottomLeft] : [.topLeft, .topRight, .bottomRight])
-            .frame(maxWidth: 520, alignment: message.role == .user ? .trailing : .leading)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                Group {
+                    if message.role == .user {
+                        LinearGradient(
+                            colors: [Color.accentColor.opacity(0.95), Color.accentColor.opacity(0.85)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    } else {
+                        Color(nsColor: .controlBackgroundColor).opacity(0.95)
+                    }
+                }
+            )
+            .clipShape(BubbleShape(isUser: message.role == .user))
+            .shadow(
+                color: message.role == .user ? Color.accentColor.opacity(0.25) : Color.black.opacity(0.08),
+                radius: message.role == .user ? 12 : 6,
+                x: 0,
+                y: message.role == .user ? 6 : 3
+            )
+            .overlay(
+                BubbleShape(isUser: message.role == .user)
+                    .stroke(
+                        message.role == .user 
+                            ? Color.white.opacity(0.2) 
+                            : Color.white.opacity(0.08),
+                        lineWidth: 1
+                    )
+            )
+            .frame(maxWidth: 480, alignment: message.role == .user ? .trailing : .leading)
             
             if message.role == .assistant {
                 assistantAvatar
             } else {
-                Spacer(minLength: 40)
+                Spacer(minLength: 60)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
     
     private var userAvatar: some View {
         ZStack {
             Circle()
-                .fill(Color.accentColor.opacity(0.2))
-                .frame(width: 28, height: 28)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.7)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 32, height: 32)
+                .shadow(color: Color.accentColor.opacity(0.3), radius: 4, x: 0, y: 2)
+            
             Image(systemName: "person.fill")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.accentColor)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
         }
     }
     
@@ -65,44 +98,112 @@ struct MessageBubble: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [Color.purple.opacity(0.8), Color.blue.opacity(0.8)]),
+                        gradient: Gradient(colors: [
+                            Color(hex: "8B5CF6").opacity(0.95),
+                            Color(hex: "6366F1").opacity(0.95),
+                            Color(hex: "3B82F6").opacity(0.95)
+                        ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
+                .shadow(color: Color.purple.opacity(0.3), radius: 4, x: 0, y: 2)
+            
             Image(systemName: "sparkles")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
         }
     }
     
     @ViewBuilder
     private var assistantHeader: some View {
-        HStack(spacing: 6) {
-            Text("John")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.primary)
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.purple, Color.blue],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
             
-            Circle()
-                .fill(Color.green)
-                .frame(width: 6, height: 6)
+            Text("John")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
             
             Spacer()
             
             Text(message.timestamp, style: .time)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.7))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.08))
+                )
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 6)
     }
+}
+
+struct BubbleShape: Shape {
+    let isUser: Bool
     
-    private var bubbleBackground: some ShapeStyle {
-        if message.role == .user {
-            return Color.accentColor
+    func path(in rect: CGRect) -> Path {
+        let radius: CGFloat = 16
+        var path = Path()
+        
+        if isUser {
+            path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+            path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius), radius: radius, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - 14))
+            path.addArc(center: CGPoint(x: rect.maxX - 2, y: rect.maxY - 14), radius: 4, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.maxX - 18, y: rect.maxY))
+            path.addArc(center: CGPoint(x: rect.maxX - radius - 2, y: rect.maxY - radius), radius: radius, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+            path.addArc(center: CGPoint(x: rect.minX + radius, y: rect.minY + radius), radius: radius, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
         } else {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.8)
+            path.move(to: CGPoint(x: rect.minX + radius + 2, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+            path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius), radius: radius, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+            path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius), radius: radius, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.minX + 18, y: rect.maxY))
+            path.addArc(center: CGPoint(x: rect.minX + 2, y: rect.maxY - 14), radius: 4, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+            path.addArc(center: CGPoint(x: rect.minX + radius, y: rect.minY + radius), radius: radius, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
         }
+        
+        path.closeSubpath()
+        return path
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }
 

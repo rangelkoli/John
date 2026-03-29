@@ -66,108 +66,159 @@ struct ChatView: View {
         }
     }
     
-    @ViewBuilder
     private func thinkingIndicator(_ tool: String?) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.purple.opacity(0.8), Color.blue.opacity(0.8)]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 28, height: 28)
-                
-                ProgressView()
-                    .scaleEffect(0.6)
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            }
+        let title = tool ?? "Thinking..."
+        
+        return HStack(spacing: 14) {
+            thinkingAvatar
             
-            VStack(alignment: .leading, spacing: 2) {
-                if let tool {
-                    Text(tool)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-                } else {
-                    Text("Thinking...")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.primary)
                 
                 Text("Processing your request")
-                    .font(.system(size: 11))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(.secondary)
             }
             
             Spacer()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.08))
+        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .background(thinkingBackground)
+        .padding(.horizontal, 60)
+    }
+    
+    private var thinkingAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(thinkingGradient)
+                .frame(width: 32, height: 32)
+                .shadow(color: Color.purple.opacity(0.3), radius: 4, x: 0, y: 2)
+            
+            ProgressView()
+                .scaleEffect(0.65)
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+        }
+    }
+    
+    private var thinkingGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.545, green: 0.361, blue: 0.965),
+                Color(red: 0.388, green: 0.4, blue: 0.945),
+                Color(red: 0.231, green: 0.510, blue: 0.965)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
-        .padding(.horizontal, 40)
+    }
+    
+    private var thinkingBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.9))
+            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
     }
     
     private var inputBar: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "message.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.5))
                 
                 TextField("Ask me anything...", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .focused($isInputFocused)
                     .lineLimit(1...5)
-                    .font(.system(size: 14))
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
                     .onSubmit {
                         sendMessage()
                     }
                     .disabled(!harness.isConfigured || harness.status.isActive)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(inputFieldBackground)
             
             Button {
                 sendMessage()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(sendButtonBackground)
-                        .frame(width: 36, height: 36)
+                        .fill(sendButtonGradient)
+                        .frame(width: 40, height: 40)
+                        .shadow(
+                            color: sendButtonShadow,
+                            radius: 6,
+                            x: 0,
+                            y: 3
+                        )
                     
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(sendButtonForeground)
+                        .offset(y: 1)
                 }
             }
             .buttonStyle(.plain)
             .disabled(inputText.isEmpty || !harness.isConfigured || harness.status.isActive)
             .scaleEffect(inputText.isEmpty ? 0.9 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: inputText.isEmpty)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: inputText.isEmpty)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .padding(.vertical, 14)
+        .background(
+            Color(nsColor: .windowBackgroundColor)
+                .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: -1)
+        )
     }
     
-    private var sendButtonBackground: Color {
+    private var inputFieldBackground: some View {
+        RoundedRectangle(cornerRadius: 22)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(inputBorderColor, lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+    
+    private var inputBorderColor: LinearGradient {
+        LinearGradient(
+            colors: isInputFocused 
+                ? [Color.accentColor.opacity(0.5), Color.accentColor.opacity(0.3)]
+                : [Color.gray.opacity(0.15), Color.gray.opacity(0.1)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var sendButtonGradient: LinearGradient {
+        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
+            return LinearGradient(
+                colors: [Color.gray.opacity(0.25), Color.gray.opacity(0.15)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color.accentColor.opacity(1.0), Color.accentColor.opacity(0.8)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var sendButtonShadow: Color {
         if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
             return Color.gray.opacity(0.2)
         }
-        return Color.accentColor
+        return Color.accentColor.opacity(0.4)
     }
     
     private var sendButtonForeground: Color {
