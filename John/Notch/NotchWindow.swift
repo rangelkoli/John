@@ -13,6 +13,7 @@ class NotchWindow: NSPanel {
     
     private var notchWidth: CGFloat = 180
     private var notchHeight: CGFloat = 37
+    private let iconMargin: CGFloat = 50 // Space for icons on each side of the notch
     
     private var isExpanded = false
     private var collapseDebounceTimer: Timer?
@@ -80,6 +81,7 @@ class NotchWindow: NSPanel {
     private func setupPillView() {
         guard let cv = contentView else { return }
         
+        // Pill view fills the entire window (including icon areas)
         pillView.frame = cv.bounds
         pillView.autoresizingMask = [.width, .height]
         pillView.alphaValue = 1
@@ -94,15 +96,16 @@ class NotchWindow: NSPanel {
     private func setupIconButtons() {
         guard let cv = contentView else { return }
         
-        // Left icon - Settings
+        // Left icon - Settings (at the left edge)
         let leftBtn = createIconButton(imageName: "gearshape.fill", action: #selector(settingsButtonClicked))
-        leftBtn.frame = NSRect(x: -30, y: (notchHeight - 24) / 2, width: 24, height: 24)
+        leftBtn.frame = NSRect(x: 8, y: (notchHeight - 24) / 2, width: 24, height: 24)
         cv.addSubview(leftBtn)
         leftIconButton = leftBtn
         
-        // Right icon - Chat
+        // Right icon - Chat (at the right edge)
         let rightBtn = createIconButton(imageName: "bubble.left.fill", action: #selector(chatButtonClicked))
-        rightBtn.frame = NSRect(x: notchWidth + 6, y: (notchHeight - 24) / 2, width: 24, height: 24)
+        rightBtn.frame = NSRect(x: cv.bounds.width - 32, y: (notchHeight - 24) / 2, width: 24, height: 24)
+        rightBtn.autoresizingMask = [.minXMargin]
         cv.addSubview(rightBtn)
         rightIconButton = rightBtn
         
@@ -152,9 +155,10 @@ class NotchWindow: NSPanel {
         // Remove existing host view if any
         pillContentHost?.removeFromSuperview()
         
+        // Center the content in the notch area (offset by iconMargin on each side)
         let hostView = NSHostingView(rootView: NotchPillContent(isHovering: isHovered, harness: harness, isPanelOpen: isPanelOpen))
-        hostView.frame = cv.bounds
-        hostView.autoresizingMask = [.width, .height]
+        hostView.frame = NSRect(x: iconMargin, y: 0, width: notchWidth, height: notchHeight)
+        hostView.autoresizingMask = []
         hostView.alphaValue = 1
         hostView.wantsLayer = true
         hostView.layer?.backgroundColor = CGColor.clear
@@ -375,10 +379,11 @@ class NotchWindow: NSPanel {
         let screenFrame = screen.frame
         
         let targetWidth: CGFloat = notchWidth + 80
+        let windowWidth = targetWidth + (iconMargin * 2)
         var target = NSRect(
-            x: screenFrame.midX - targetWidth / 2,
+            x: screenFrame.midX - windowWidth / 2,
             y: screenFrame.maxY - notchHeight,
-            width: targetWidth,
+            width: windowWidth,
             height: notchHeight
         )
         
@@ -402,11 +407,12 @@ class NotchWindow: NSPanel {
         
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
+        let windowWidth = notchWidth + (iconMargin * 2)
         
         var target = NSRect(
-            x: screenFrame.midX - notchWidth / 2,
+            x: screenFrame.midX - windowWidth / 2,
             y: screenFrame.maxY - notchHeight,
-            width: notchWidth,
+            width: windowWidth,
             height: notchHeight
         )
         
@@ -442,9 +448,11 @@ class NotchWindow: NSPanel {
     private func positionAtNotch() {
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
-        let x = screenFrame.midX - notchWidth / 2
+        // Expand window width to include space for icons on both sides
+        let windowWidth = notchWidth + (iconMargin * 2)
+        let x = screenFrame.midX - windowWidth / 2
         let y = screenFrame.maxY - notchHeight
-        setFrame(NSRect(x: x, y: y, width: notchWidth, height: notchHeight), display: true)
+        setFrame(NSRect(x: x, y: y, width: windowWidth, height: notchHeight), display: true)
     }
     
     // MARK: - Mouse tracking
@@ -535,10 +543,11 @@ class NotchWindow: NSPanel {
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
         let baseWidth = isExpanded ? notchWidth + 80 : notchWidth
+        let windowWidth = baseWidth + (iconMargin * 2)
         let target = NSRect(
-            x: screenFrame.midX - baseWidth / 2,
+            x: screenFrame.midX - windowWidth / 2,
             y: screenFrame.maxY - notchHeight,
-            width: baseWidth,
+            width: windowWidth,
             height: notchHeight
         )
         

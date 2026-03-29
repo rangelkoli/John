@@ -7,6 +7,28 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
+PORT=8765
+
+stop_backend() {
+    echo "Checking for existing backend process..."
+    
+    # Find and kill any process running on the backend port
+    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "Stopping existing backend on port $PORT..."
+        lsof -Pi :$PORT -sTCP:LISTEN -t | xargs kill -92>/dev/null || true
+        sleep 1
+        
+        # Force kill if still running
+        if lsof -Pi :$PORT-sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "Force killing stubborn process..."
+            lsof -Pi :$PORT -sTCP:LISTEN -t | xargs kill -9 2>/dev/null || true
+            sleep 1
+        fi
+        echo "Previous backend stopped."
+    else
+        echo "No existing backend found on port $PORT."
+    fi
+}
 
 check_python() {
     if command -v python3 &> /dev/null; then
@@ -49,10 +71,11 @@ start_backend() {
     echo "Starting John Agent Backend..."
     cd "$BACKEND_DIR"
     source venv/bin/activate
-    uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload
+    uvicorn app.main:app --host 127.0.0.1 --port $PORT --reload
 }
 
 main() {
+    stop_backend
     check_python
     check_venv
     check_env
