@@ -11,7 +11,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hoverHideTimer: Timer?
     private var hoverGlobalMonitor: Any?
     private var hoverLocalMonitor: Any?
-    private var hotkeyMonitor: Any?
+    private var globalHotkeyMonitor: Any?
+    private var localHotkeyMonitor: Any?
     
     private var panelOpenedViaHover = false
     private let hoverMargin: CGFloat = 15
@@ -38,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        if let monitor = hotkeyMonitor {
+        if let monitor = globalHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
         }
         if let monitor = localHotkeyMonitor {
@@ -93,32 +94,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agentPanel.setNotchWindow(notchWindow!)
     }
     
-    private var localHotkeyMonitor: Any?
-    
     private func setupHotkey() {
-        // Global hotkey for when app is NOT active
-        hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleHotkey(event: event)
-        }
-        
-        // Local hotkey for when app IS active
+        // Local monitor for when app is active
         localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleHotkey(event: event)
             return event
+        }
+        
+        // Global monitor for when app is in background
+        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleHotkey(event: event)
         }
     }
     
     private func handleHotkey(event: NSEvent) {
         // Space key code is 49
         guard event.keyCode == 49 else { return }
-        // Check for Command + Shift (both must be pressed)
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        
+        // Check for Command + Shift
+        let flags = event.modifierFlags
         let hasCommand = flags.contains(.command)
         let hasShift = flags.contains(.shift)
-        let hasOther = flags.subtracting([.command, .shift]).isEmpty
         
-        guard hasCommand && hasShift && hasOther else { return }
+        guard hasCommand && hasShift else { return }
         
+        // Toggle panel
         DispatchQueue.main.async { [weak self] in
             self?.togglePanelAndFocus()
         }
@@ -131,11 +131,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             panelOpenedViaHover = false
             stopHoverTracking()
         } else {
-            // Stop any hover tracking that might close the panel
             stopHoverTracking()
             panelOpenedViaHover = false
             showPanelBelowStatusItem()
-            // Focus on input after panel is shown
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.agentPanel.focusInput()
             }
@@ -152,7 +150,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func showSettingsPanel() {
-        // Check if settings window already exists
         if let existingWindow = NSApplication.shared.windows.first(where: { $0.title == "John Settings" }) {
             existingWindow.makeKeyAndOrderFront(nil)
             return
@@ -285,6 +282,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         newItem.target = self
         menu.addItem(newItem)
         
+        let toggleItem = NSMenuItem(
+            title: "Toggle Panel",
+            action: #selector(togglePanelFromMenu),
+            keyEquivalent: " "
+        )
+        toggleItem.target = self
+        toggleItem.keyEquivalentModifierMask = [.command, .shift]
+        menu.addItem(toggleItem)
+        
         menu.addItem(.separator())
         
         let quitItem = NSMenuItem(
@@ -297,6 +303,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+    
+    @objc private func togglePanelFromMenu() {
+        togglePanelAndFocus()
     }
     
     @objc private func toggleShowInNotch() {
