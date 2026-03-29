@@ -24,6 +24,7 @@
         E00000015 /* PanelContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100014; };
         E00000016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100015; };
         E00000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E00100016; };
+        E00000018 /* EnvManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100019; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
         E00100016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
         E00100017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
         E00100018 /* John.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = John.entitlements; sourceTree = "<group>"; };
+        E00100019 /* EnvManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvManager.swift; sourceTree = "<group>"; };
         E00200000 /* John.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = John.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -108,6 +110,7 @@
                 E00100006 /* KeychainManager.swift */,
                 E00100007 /* OpenRouterClient.swift */,
                 E00100008 /* AgentHarness.swift */,
+                E00100019 /* EnvManager.swift */,
             );
             path = Services;
             sourceTree = "<group>";
@@ -235,6 +238,7 @@
                 E00000014 /* NotchPillContent.swift in Sources */,
                 E00000015 /* PanelContentView.swift in Sources */,
                 E00000016 /* SettingsView.swift in Sources */,
+                E00000018 /* EnvManager.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

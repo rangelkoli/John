@@ -19,6 +19,44 @@ struct SettingsView: View {
                 Text("API Configuration")
                     .font(.headline)
                 
+                // Show current source
+                HStack {
+                    Text("Source:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(harness.apiKeySource)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(harness.apiKeySource == "Not Set" ? .red : .green)
+                    
+                    if harness.apiKeySource == "Environment" {
+                        Text("(\(EnvManager.getEnvFilePath().lastPathComponent))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Env file instructions
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("To use environment file, create:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("~/.john.env")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.blue)
+                    Text("with: OPENROUTER_API_KEY=your_key_here")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
+                
+                // Manual override
+                Text("Or save manually below (override):")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
                 HStack {
                     if showAPIKey {
                         TextField("OpenRouter API Key", text: $apiKey)
@@ -35,10 +73,18 @@ struct SettingsView: View {
                 }
                 
                 HStack {
-                    Button("Save API Key") {
+                    Button("Save to Keychain") {
                         saveAPIKey()
                     }
                     .disabled(apiKey.isEmpty)
+                    
+                    if !KeychainManager.retrieveOrEmpty(key: "openrouter_api_key").isEmpty {
+                        Button("Clear Keychain") {
+                            try? KeychainManager.delete(key: "openrouter_api_key")
+                            apiKey = ""
+                        }
+                        .foregroundColor(.red)
+                    }
                     
                     Link("Get API Key", destination: URL(string: "https://openrouter.ai/keys")!)
                         .font(.caption)
@@ -101,7 +147,7 @@ struct SettingsView: View {
             }
         }
         .padding()
-        .frame(width: 400, height: 480)
+        .frame(width: 420, height: 520)
         .onAppear {
             loadAPIKey()
             customSystemPrompt = AgentHarness.defaultSystemPrompt
@@ -117,6 +163,13 @@ struct SettingsView: View {
     }
     
     private func loadAPIKey() {
-        apiKey = KeychainManager.retrieveOrEmpty(key: "openrouter_api_key")
+        // Show keychain value if set, otherwise show env value if available
+        let keychainKey = KeychainManager.retrieveOrEmpty(key: "openrouter_api_key")
+        if !keychainKey.isEmpty {
+            apiKey = keychainKey
+        } else if let envKey = EnvManager.loadAPIKey() {
+            // Show placeholder for env key
+            apiKey = String(envKey.prefix(8)) + "..." + String(envKey.suffix(4))
+        }
     }
 }

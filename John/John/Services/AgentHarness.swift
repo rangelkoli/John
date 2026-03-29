@@ -24,7 +24,22 @@ final class AgentHarness {
     """
     
     var apiKey: String {
-        KeychainManager.retrieveOrEmpty(key: "openrouter_api_key")
+        // First check env file
+        if let envKey = EnvManager.loadAPIKey(), !envKey.isEmpty {
+            return envKey
+        }
+        // Fallback to keychain
+        return KeychainManager.retrieveOrEmpty(key: "openrouter_api_key")
+    }
+    
+    var apiKeySource: String {
+        if EnvManager.loadAPIKey() != nil {
+            return "Environment"
+        }
+        if !KeychainManager.retrieveOrEmpty(key: "openrouter_api_key").isEmpty {
+            return "Keychain"
+        }
+        return "Not Set"
     }
     
     var isConfigured: Bool {
