@@ -31,9 +31,10 @@ struct AppConfiguration {
 }
 
 enum DefaultModels {
-    static let preferred = "deepseek/deepseek-chat"
+    static let preferred = "nvidia/nemotron-3-super-120b-a12b:free"
     
     static let available: [(name: String, id: String)] = [
+        ("Nemotron 3 Super 120B (Free)", "nvidia/nemotron-3-super-120b-a12b:free"),
         ("DeepSeek Chat", "deepseek/deepseek-chat"),
         ("Claude 3.5 Sonnet", "anthropic/claude-3.5-sonnet"),
         ("GPT-4o", "openai/gpt-4o"),
