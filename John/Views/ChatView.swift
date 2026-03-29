@@ -13,6 +13,7 @@ struct ChatView: View {
             messagesList
             
             Divider()
+                .opacity(0.5)
             
             inputBar
             
@@ -35,7 +36,7 @@ struct ChatView: View {
     private var messagesList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(harness.messages.filter { $0.role != .system }) { message in
                         MessageBubble(message: message)
                             .id(message.id)
@@ -45,10 +46,11 @@ struct ChatView: View {
                         thinkingIndicator(tool)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
             }
             .onChange(of: harness.messages.count) {
-                withAnimation {
+                withAnimation(.easeOut(duration: 0.2)) {
                     if let lastMessage = harness.messages.last {
                         proxy.scrollTo(lastMessage.id, anchor: .bottom)
                     }
@@ -66,78 +68,144 @@ struct ChatView: View {
     
     @ViewBuilder
     private func thinkingIndicator(_ tool: String?) -> some View {
-        HStack {
-            ProgressView()
-                .scaleEffect(0.8)
-            if let tool {
-                Text(tool)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("Thinking...")
-                    .font(.caption)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.purple.opacity(0.8), Color.blue.opacity(0.8)]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 28, height: 28)
+                
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                if let tool {
+                    Text(tool)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                } else {
+                    Text("Thinking...")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                
+                Text("Processing your request")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
+            
+            Spacer()
         }
-        .padding()
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(12)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.08))
+        )
+        .padding(.horizontal, 40)
     }
     
     private var inputBar: some View {
-        HStack(spacing: 8) {
-            TextField("Message...", text: $inputText, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .focused($isInputFocused)
-                .lineLimit(1...6)
-                .onSubmit {
-                    sendMessage()
-                }
-                .disabled(!harness.isConfigured || harness.status.isActive)
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "message.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary.opacity(0.6))
+                
+                TextField("Ask me anything...", text: $inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .focused($isInputFocused)
+                    .lineLimit(1...5)
+                    .font(.system(size: 14))
+                    .onSubmit {
+                        sendMessage()
+                    }
+                    .disabled(!harness.isConfigured || harness.status.isActive)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+            )
             
             Button {
                 sendMessage()
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(sendButtonColor)
+                ZStack {
+                    Circle()
+                        .fill(sendButtonBackground)
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(sendButtonForeground)
+                }
             }
             .buttonStyle(.plain)
             .disabled(inputText.isEmpty || !harness.isConfigured || harness.status.isActive)
+            .scaleEffect(inputText.isEmpty ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: inputText.isEmpty)
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(Color(nsColor: .windowBackgroundColor))
     }
     
-    private var sendButtonColor: Color {
-        if !harness.isConfigured {
-            return .gray
+    private var sendButtonBackground: Color {
+        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
+            return Color.gray.opacity(0.2)
         }
-        if inputText.isEmpty {
-            return .gray
+        return Color.accentColor
+    }
+    
+    private var sendButtonForeground: Color {
+        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
+            return Color.gray.opacity(0.5)
         }
-        if harness.status.isActive {
-            return .gray
-        }
-        return .accentColor
+        return .white
     }
     
     private var apiKeyWarning: some View {
-        HStack {
+        HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
                 .foregroundColor(.orange)
+            
             Text("Configure your OpenRouter API key in Settings")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
             Button("Settings") {
                 NotificationCenter.default.post(name: .ShowSettings, object: nil)
             }
-            .buttonStyle(.plain)
-            .foregroundColor(.accentColor)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
         }
-        .padding(8)
-        .background(Color.orange.opacity(0.1))
-        .cornerRadius(8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.orange.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }
     
