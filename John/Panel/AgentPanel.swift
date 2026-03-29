@@ -14,7 +14,7 @@ class AgentPanel: NSPanel {
         
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 500),
-            styleMask: [.borderless, .resizable, .fullSizeContentView, .nonactivatingPanel],
+            styleMask: [.borderless, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: true
         )

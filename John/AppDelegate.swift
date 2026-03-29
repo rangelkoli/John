@@ -37,6 +37,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupSettingsObserver()
     }
     
+    func applicationWillTerminate(_ notification: Notification) {
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = localHotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+    
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         
@@ -84,18 +93,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         agentPanel.setNotchWindow(notchWindow!)
     }
     
-private func setupHotkey() {
-        // Shift-Command-Space to toggle panel
+    private var localHotkeyMonitor: Any?
+    
+    private func setupHotkey() {
+        // Global hotkey for when app is NOT active
         hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            // Space key code is 49
-            guard event.keyCode == 49 else { return }
-            // Check for Command + Shift
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard modifiers.contains(.command) && modifiers.contains(.shift) else { return }
-            // Ensure no other modifiers
-            guard modifiers.isSubset(of: [.command, .shift]) else { return }
-            
-            DispatchQueue.main.async { self?.togglePanelAndFocus() }
+            self?.handleHotkey(event: event)
+        }
+        
+        // Local hotkey for when app IS active
+        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleHotkey(event: event)
+            return event
+        }
+    }
+    
+    private func handleHotkey(event: NSEvent) {
+        // Space key code is 49
+        guard event.keyCode == 49 else { return }
+        // Check for Command + Shift (both must be pressed)
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let hasCommand = flags.contains(.command)
+        let hasShift = flags.contains(.shift)
+        let hasOther = flags.subtracting([.command, .shift]).isEmpty
+        
+        guard hasCommand && hasShift && hasOther else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.togglePanelAndFocus()
         }
     }
     
@@ -106,10 +131,12 @@ private func setupHotkey() {
             panelOpenedViaHover = false
             stopHoverTracking()
         } else {
+            // Stop any hover tracking that might close the panel
+            stopHoverTracking()
             panelOpenedViaHover = false
             showPanelBelowStatusItem()
             // Focus on input after panel is shown
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.agentPanel.focusInput()
             }
         }
