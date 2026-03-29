@@ -11,8 +11,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hoverHideTimer: Timer?
     private var hoverGlobalMonitor: Any?
     private var hoverLocalMonitor: Any?
-    private var globalHotkeyMonitor: Any?
-    private var localHotkeyMonitor: Any?
     
     private var panelOpenedViaHover = false
     private let hoverMargin: CGFloat = 15
@@ -34,16 +32,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if showInNotch {
             setupNotchWindow()
         }
-        setupHotkey()
+        setupGlobalHotkey()
         setupSettingsObserver()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        if let monitor = globalHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
+        GlobalHotkeyManager.shared.unregisterHotkey()
+    }
+    
+    private func setupGlobalHotkey() {
+        // Shift + Command + Space = keyCode 49 (Space)
+        GlobalHotkeyManager.shared.registerHotkey(
+            modifiers: [.command, .shift],
+            keyCode: 49
+        ) { [weak self] in
+            self?.togglePanelAndFocus()
         }
-        if let monitor = localHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
+    }
+    
+    private func togglePanelAndFocus() {
+        if agentPanel.isVisible {
+            agentPanel.hidePanel()
+            notchWindow?.endHover()
+            panelOpenedViaHover = false
+            stopHoverTracking()
+        } else {
+            stopHoverTracking()
+            panelOpenedViaHover = false
+            showPanelBelowStatusItem()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.agentPanel.focusInput()
+            }
         }
     }
     
@@ -92,52 +111,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         agentPanel.setNotchWindow(notchWindow!)
-    }
-    
-    private func setupHotkey() {
-        // Local monitor for when app is active
-        localHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleHotkey(event: event)
-            return event
-        }
-        
-        // Global monitor for when app is in background
-        globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleHotkey(event: event)
-        }
-    }
-    
-    private func handleHotkey(event: NSEvent) {
-        // Space key code is 49
-        guard event.keyCode == 49 else { return }
-        
-        // Check for Command + Shift
-        let flags = event.modifierFlags
-        let hasCommand = flags.contains(.command)
-        let hasShift = flags.contains(.shift)
-        
-        guard hasCommand && hasShift else { return }
-        
-        // Toggle panel
-        DispatchQueue.main.async { [weak self] in
-            self?.togglePanelAndFocus()
-        }
-    }
-    
-    private func togglePanelAndFocus() {
-        if agentPanel.isVisible {
-            agentPanel.hidePanel()
-            notchWindow?.endHover()
-            panelOpenedViaHover = false
-            stopHoverTracking()
-        } else {
-            stopHoverTracking()
-            panelOpenedViaHover = false
-            showPanelBelowStatusItem()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                self?.agentPanel.focusInput()
-            }
-        }
     }
     
     private func setupSettingsObserver() {
