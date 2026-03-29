@@ -25,6 +25,8 @@ class NotchWindow: NSPanel {
     
     private let pillView = NotchPillView()
     private var pillContentHost: NSHostingView<NotchPillContent>?
+    private var leftIconButton: NSButton?
+    private var rightIconButton: NSButton?
     
     // Smooth animation state
     private var animationDisplayLink: CVDisplayLink?
@@ -86,6 +88,62 @@ class NotchWindow: NSPanel {
         cv.layer?.masksToBounds = false
         
         updatePillContent()
+        setupIconButtons()
+    }
+    
+    private func setupIconButtons() {
+        guard let cv = contentView else { return }
+        
+        // Left icon - Settings
+        let leftBtn = createIconButton(imageName: "gearshape.fill", action: #selector(settingsButtonClicked))
+        leftBtn.frame = NSRect(x: -30, y: (notchHeight - 24) / 2, width: 24, height: 24)
+        cv.addSubview(leftBtn)
+        leftIconButton = leftBtn
+        
+        // Right icon - Chat
+        let rightBtn = createIconButton(imageName: "bubble.left.fill", action: #selector(chatButtonClicked))
+        rightBtn.frame = NSRect(x: notchWidth + 6, y: (notchHeight - 24) / 2, width: 24, height: 24)
+        cv.addSubview(rightBtn)
+        rightIconButton = rightBtn
+        
+        updateIconVisibility()
+    }
+    
+    private func createIconButton(imageName: String, action: Selector) -> NSButton {
+        let button = NSButton(frame: .zero)
+        button.bezelStyle = .regularSquare
+        button.isBordered = false
+        button.image = NSImage(systemSymbolName: imageName, accessibilityDescription: nil)
+        button.image?.isTemplate = true
+        button.contentTintColor = .white
+        button.target = self
+        button.action = action
+        button.alphaValue = 0.9
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 12
+        button.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+        return button
+    }
+    
+    @objc private func settingsButtonClicked() {
+        NotificationCenter.default.post(name: .ShowSettings, object: nil)
+    }
+    
+    @objc private func chatButtonClicked() {
+        onHover?()
+    }
+    
+    private func updateIconVisibility() {
+        let shouldShow = !isPanelOpen
+        leftIconButton?.isHidden = !shouldShow
+        rightIconButton?.isHidden = !shouldShow
+        
+        // Animate visibility
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            self.leftIconButton?.animator().alphaValue = shouldShow ? 0.9 : 0
+            self.rightIconButton?.animator().alphaValue = shouldShow ? 0.9 : 0
+        }
     }
     
     private func updatePillContent() {
@@ -117,6 +175,7 @@ class NotchWindow: NSPanel {
     
     func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
+        updateIconVisibility()
     }
     
     private func observeToggleNotification() {

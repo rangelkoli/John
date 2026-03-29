@@ -11,59 +11,42 @@ struct NotchPillContent: View {
     
     var body: some View {
         ZStack {
-            HStack(spacing: 0) {
-                // Left side icons
-                HStack(spacing: 8) {
-                    if !isPanelOpen {
-                        leftIcon
-                    }
-                    
-                    if displayStatus != .idle {
-                        // Bot Face with enhanced styling
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.white.opacity(0.95),
-                                            Color.white.opacity(0.8)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+            HStack(spacing: 10) {
+                if displayStatus != .idle {
+                    // Bot Face with enhanced styling
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.95),
+                                        Color.white.opacity(0.8)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                                .frame(width: 22, height: 22)
-                                .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
-                            
-                            BotFaceView()
-                                .frame(width: 14, height: 10)
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                // Right side icons
-                HStack(spacing: 8) {
-                    // Status indicator with enhanced animations
-                    if displayStatus != .idle {
-                        statusIndicator
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.5).combined(with: .opacity),
-                                removal: .scale(scale: 0.5).combined(with: .opacity)
-                            ))
+                            )
+                            .frame(width: 22, height: 22)
+                            .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        
+                        BotFaceView()
+                            .frame(width: 14, height: 10)
                     }
                     
-                    if !isPanelOpen {
-                        rightIcon
-                    }
+                    Spacer()
+                    
+                    // Status indicator with enhanced animations
+                    statusIndicator
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.5).combined(with: .opacity),
+                            removal: .scale(scale: 0.5).combined(with: .opacity)
+                        ))
                 }
             }
             .animation(
                 .spring(response: 0.35, dampingFraction: 0.75),
                 value: displayStatus
             )
-            .animation(.easeInOut(duration: 0.2), value: isPanelOpen)
             .padding(.horizontal, 12 + (isHovering ? NotchPillView.earRadius : 0))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -72,42 +55,6 @@ struct NotchPillContent: View {
         .onChange(of: displayStatus) {
             NotificationCenter.default.post(name: .JohnStatusChanged, object: nil)
         }
-    }
-    
-    private var leftIcon: some View {
-        Button {
-            NotificationCenter.default.post(name: .ShowSettings, object: nil)
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.15))
-                    .frame(width: 24, height: 24)
-                
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(.plain)
-        .help("Settings")
-    }
-    
-    private var rightIcon: some View {
-        Button {
-            NotificationCenter.default.post(name: .TogglePanel, object: nil)
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.15))
-                    .frame(width: 24, height: 24)
-                
-                Image(systemName: "bubble.left.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(.plain)
-        .help("Open Chat")
     }
     
     @ViewBuilder
