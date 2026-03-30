@@ -27,6 +27,8 @@
         E00000018 /* EnvManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100019; };
         E00000019 /* GlobalHotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100020; };
         E00000020 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100021; };
+        E00000021 /* MusicPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100022; };
+        E00000022 /* MusicPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100023; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
         E00100019 /* EnvManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvManager.swift; sourceTree = "<group>"; };
         E00100020 /* GlobalHotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeyManager.swift; sourceTree = "<group>"; };
         E00100021 /* BackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendClient.swift; sourceTree = "<group>"; };
+        E00100022 /* MusicPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerService.swift; sourceTree = "<group>"; };
+        E00100023 /* MusicPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerView.swift; sourceTree = "<group>"; };
         E00200000 /* John.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = John.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -117,6 +121,7 @@
                 E00100019 /* EnvManager.swift */,
                 E00100020 /* GlobalHotkeyManager.swift */,
                 E00100021 /* BackendClient.swift */,
+                E00100022 /* MusicPlayerService.swift */,
             );
             path = Services;
             sourceTree = "<group>";
@@ -145,6 +150,7 @@
                 E00100013 /* NotchPillContent.swift */,
                 E00100014 /* PanelContentView.swift */,
                 E00100015 /* SettingsView.swift */,
+                E00100023 /* MusicPlayerView.swift */,
             );
             path = Views;
             sourceTree = "<group>";
@@ -247,6 +253,8 @@
                 E00000018 /* EnvManager.swift in Sources */,
                 E00000019 /* GlobalHotkeyManager.swift in Sources */,
                 E00000020 /* BackendClient.swift in Sources */,
+                E00000021 /* MusicPlayerService.swift in Sources */,
+                E00000022 /* MusicPlayerView.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
