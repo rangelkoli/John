@@ -15,7 +15,7 @@ struct PanelContentView: View {
             ChatView(harness: harness, inputText: $inputText, isInputFocused: _isInputFocused)
                 .frame(maxHeight: .infinity)
         }
-        .frame(minWidth: 520, minHeight: 440)
+        .frame(minWidth: 420, minHeight: 280)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(Color(nsColor: .windowBackgroundColor))

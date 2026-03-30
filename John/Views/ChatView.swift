@@ -11,10 +11,7 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messagesList
-            
-            Divider()
-                .opacity(0.5)
-            
+
             inputBar
             
             if !harness.isConfigured {
@@ -126,106 +123,59 @@ struct ChatView: View {
     }
     
     private var inputBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "message.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary.opacity(0.5))
-                
-                TextField("Ask me anything...", text: $inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .focused($isInputFocused)
-                    .lineLimit(1...5)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .onSubmit {
-                        sendMessage()
-                    }
-                    .disabled(!harness.isConfigured || harness.status.isActive)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(inputFieldBackground)
-            
+        HStack(spacing: 8) {
+            TextField("Ask me anything...", text: $inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .focused($isInputFocused)
+                .lineLimit(1...4)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .onSubmit {
+                    sendMessage()
+                }
+                .disabled(!harness.isConfigured || harness.status.isActive)
+
             Button {
                 sendMessage()
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(sendButtonGradient)
-                        .frame(width: 40, height: 40)
-                        .shadow(
-                            color: sendButtonShadow,
-                            radius: 6,
-                            x: 0,
-                            y: 3
-                        )
-                    
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(sendButtonForeground)
-                        .offset(y: 1)
-                }
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(sendButtonForeground)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(sendButtonBackground)
+                    )
             }
             .buttonStyle(.plain)
             .disabled(inputText.isEmpty || !harness.isConfigured || harness.status.isActive)
-            .scaleEffect(inputText.isEmpty ? 0.9 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: inputText.isEmpty)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: inputText.isEmpty)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
         .background(
-            Color(nsColor: .windowBackgroundColor)
-                .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: -1)
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .strokeBorder(
+                            isInputFocused ? Color.accentColor.opacity(0.45) : Color.gray.opacity(0.18),
+                            lineWidth: 1
+                        )
+                )
         )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
-    
-    private var inputFieldBackground: some View {
-        RoundedRectangle(cornerRadius: 22)
-            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22)
-                    .strokeBorder(inputBorderColor, lineWidth: 1.5)
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+
+    private var sendButtonBackground: Color {
+        inputText.isEmpty || !harness.isConfigured || harness.status.isActive
+            ? Color.gray.opacity(0.15)
+            : Color.accentColor
     }
-    
-    private var inputBorderColor: LinearGradient {
-        LinearGradient(
-            colors: isInputFocused 
-                ? [Color.accentColor.opacity(0.5), Color.accentColor.opacity(0.3)]
-                : [Color.gray.opacity(0.15), Color.gray.opacity(0.1)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-    
-    private var sendButtonGradient: LinearGradient {
-        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
-            return LinearGradient(
-                colors: [Color.gray.opacity(0.25), Color.gray.opacity(0.15)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        return LinearGradient(
-            colors: [Color.accentColor.opacity(1.0), Color.accentColor.opacity(0.8)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-    
-    private var sendButtonShadow: Color {
-        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
-            return Color.gray.opacity(0.2)
-        }
-        return Color.accentColor.opacity(0.4)
-    }
-    
+
     private var sendButtonForeground: Color {
-        if !harness.isConfigured || inputText.isEmpty || harness.status.isActive {
-            return Color.gray.opacity(0.5)
-        }
-        return .white
+        inputText.isEmpty || !harness.isConfigured || harness.status.isActive
+            ? Color.gray.opacity(0.4)
+            : .white
     }
     
     private var apiKeyWarning: some View {
