@@ -3,10 +3,11 @@ import SwiftUI
 struct PanelContentView: View {
     @Bindable var harness: AgentHarness
     let onClose: () -> Void
-    
+
     @State private var inputText = ""
     @State private var isScrolling = false
     @FocusState private var isInputFocused: Bool
+    @State private var musicService = MusicPlayerService()
     
     var body: some View {
         VStack(spacing: 0) {
@@ -59,12 +60,20 @@ struct PanelContentView: View {
             Spacer()
             
             HStack(spacing: 8) {
+                if musicService.hasNowPlaying {
+                    miniMusicPlayer
+
+                    Divider()
+                        .frame(height: 20)
+                        .opacity(0.3)
+                }
+
                 modelPicker
-                
+
                 Divider()
                     .frame(height: 20)
                     .opacity(0.3)
-                
+
                 settingsButton
                 closeButton
             }
@@ -84,6 +93,57 @@ struct PanelContentView: View {
         )
     }
     
+    private var miniMusicPlayer: some View {
+        HStack(spacing: 6) {
+            if let art = musicService.albumArt {
+                Image(nsImage: art)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+
+            Text(musicService.trackName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .frame(maxWidth: 120, alignment: .leading)
+
+            HStack(spacing: 2) {
+                Button { musicService.previousTrack() } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+
+                Button { musicService.togglePlayPause() } label: {
+                    Image(systemName: musicService.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.primary)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(Color.gray.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+
+                Button { musicService.nextTrack() } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.gray.opacity(0.08))
+        )
+    }
+
     private var modelPicker: some View {
         Menu {
             ForEach(DefaultModels.available, id: \.id) { model in
