@@ -68,12 +68,6 @@ struct PanelContentView: View {
                         .opacity(0.3)
                 }
 
-                modelPicker
-
-                Divider()
-                    .frame(height: 20)
-                    .opacity(0.3)
-
                 settingsButton
                 closeButton
             }
@@ -144,37 +138,6 @@ struct PanelContentView: View {
         )
     }
 
-    private var modelPicker: some View {
-        Menu {
-            ForEach(DefaultModels.available, id: \.id) { model in
-                Button(model.name) {
-                    harness.setModel(model.id)
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "cpu")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                
-                Text(shortModelName(harness.currentModel))
-                    .font(.system(size: 12, weight: .medium))
-                
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .foregroundColor(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.12))
-            )
-        }
-        .menuStyle(.borderlessButton)
-    }
-    
     private var settingsButton: some View {
         Button {
             NotificationCenter.default.post(name: .ShowSettings, object: nil)
@@ -207,7 +170,4 @@ struct PanelContentView: View {
         .buttonStyle(.plain)
     }
     
-    private func shortModelName(_ id: String) -> String {
-        DefaultModels.available.first { $0.id == id }?.name ?? id.split(separator: "/").last.map(String.init) ?? id
-    }
 }

@@ -190,31 +190,6 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Model Selection Section
-                settingsSection(icon: "cpu", iconColor: .blue, title: "Model") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Choose your preferred AI model")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                        
-                        Picker("", selection: $harness.currentModel) {
-                            ForEach(DefaultModels.available, id: \.id) { model in
-                                Text(model.name).tag(model.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .padding(10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(nsColor: .textBackgroundColor))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                )
-                        )
-                    }
-                }
-                
                 // System Prompt Section
                 settingsSection(icon: "text.bubble", iconColor: .green, title: "System Prompt") {
                     VStack(alignment: .leading, spacing: 12) {
