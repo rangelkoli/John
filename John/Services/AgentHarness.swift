@@ -12,18 +12,24 @@ final class AgentHarness {
     var currentModel: String = DefaultModels.preferred
     var backend: AgentBackend = .langchainBackend
     var isBackendHealthy: Bool = false
-    
+    var voiceService: VoiceService?
+
     private let backendClient = BackendClient.shared
     private let openRouterClient = OpenRouterClient.shared
     private var systemPrompt: String
     private var task: Task<Void, Never>?
     private var threadId: String = "default"
-    
+
     init(systemPrompt: String? = nil) {
         self.systemPrompt = systemPrompt ?? Self.defaultSystemPrompt
         resetConversation()
-        Task {
-            await checkBackendHealth()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let vs = VoiceService()
+            vs.harness = self
+            self.voiceService = vs
+            await self.checkBackendHealth()
+            vs.restoreEnabledState()
         }
     }
     
@@ -89,6 +95,25 @@ final class AgentHarness {
         }
     }
     
+    func sendStreamingAndWait(_ userInput: String) async -> String {
+        guard !userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
+        
+        let assistantIndex = await MainActor.run {
+            let userMessage = Message(role: .user, content: userInput)
+            messages.append(userMessage)
+            status = .thinking(nil)
+            let assistantMessage = Message(role: .assistant, content: "")
+            messages.append(assistantMessage)
+            return messages.count - 1
+        }
+        
+        if backend == .langchainBackend && isBackendHealthy {
+            return await sendStreamingViaBackendAndWait(userInput, assistantIndex: assistantIndex)
+        } else {
+            return await sendStreamingViaOpenRouterAndWait(userInput, assistantIndex: assistantIndex)
+        }
+    }
+    
     private func sendViaBackend(_ userInput: String) async {
         guard isConfigured else {
             status = .error("Please configure your OpenRouter API key in Settings")
@@ -132,14 +157,20 @@ final class AgentHarness {
             return
         }
         
-        let userMessage = Message(role: .user, content: userInput)
-        messages.append(userMessage)
-        status = .thinking(nil)
+        await MainActor.run {
+            let userMessage = Message(role: .user, content: userInput)
+            messages.append(userMessage)
+            status = .thinking(nil)
+        }
         
         var accumulatedContent = ""
-        let assistantMessage = Message(role: .assistant, content: "")
-        messages.append(assistantMessage)
+        await MainActor.run {
+            let assistantMessage = Message(role: .assistant, content: "")
+            messages.append(assistantMessage)
+        }
         let assistantIndex = messages.count - 1
+        
+        print("[DEBUG] Backend streaming started, assistantIndex=\(assistantIndex)")
         
         task = Task { [weak self] in
             guard let self else { return }
@@ -149,29 +180,31 @@ final class AgentHarness {
                     message: userInput,
                     threadId: self.threadId
                 ) { event in
-                    if let output = event.output {
-                        if let messages = output.messages {
-                            for msg in messages {
-                                if let content = msg.content, let type = msg.type {
-                                    if type == "ai" {
-                                        accumulatedContent = content
-                                    }
+                    if let type = event.type, type == "token", let accumulated = event.accumulated {
+                        accumulatedContent = accumulated
+                    } else if let output = event.output {
+                        if let response = output.final_response ?? output.response {
+                            accumulatedContent = response
+                        } else if let msgs = output.messages {
+                            for msg in msgs {
+                                if let content = msg.content, let type = msg.type, type == "ai" {
+                                    accumulatedContent = content
                                 }
                             }
                         }
-                        if let response = output.response {
-                            accumulatedContent = response
-                        }
                     }
                     
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        self.messages[assistantIndex] = Message(
+                    print("[DEBUG] Backend chunk received, type=\(event.type ?? "unknown"), accumulatedContent length=\(accumulatedContent.count)")
+                    
+                    DispatchQueue.main.async {
+                        var updated = self.messages
+                        updated[assistantIndex] = Message(
                             id: self.messages[assistantIndex].id,
                             role: .assistant,
                             content: accumulatedContent,
                             timestamp: self.messages[assistantIndex].timestamp
                         )
+                        self.messages = updated
                     }
                 }
                 
@@ -183,6 +216,7 @@ final class AgentHarness {
             } catch {
                 if !Task.isCancelled {
                     await MainActor.run {
+                        print("[DEBUG] Backend streaming error: \(error.localizedDescription)")
                         self.messages.removeLast()
                         self.status = .error(error.localizedDescription)
                     }
@@ -230,14 +264,20 @@ final class AgentHarness {
             return
         }
         
-        let userMessage = Message(role: .user, content: userInput)
-        messages.append(userMessage)
-        status = .thinking(nil)
+        await MainActor.run {
+            let userMessage = Message(role: .user, content: userInput)
+            messages.append(userMessage)
+            status = .thinking(nil)
+        }
         
         var accumulatedContent = ""
         let assistantMessage = Message(role: .assistant, content: "")
-        messages.append(assistantMessage)
+        await MainActor.run {
+            messages.append(assistantMessage)
+        }
         let assistantIndex = messages.count - 1
+        
+        print("[DEBUG] Assistant message appended at index \(assistantIndex)")
         
         task = Task { [weak self] in
             guard let self else { return }
@@ -250,25 +290,132 @@ final class AgentHarness {
                 ) { chunk in
                     accumulatedContent += chunk
                     Task { @MainActor in
-                        self.messages[assistantIndex] = Message(
+                        var updated = self.messages
+                        updated[assistantIndex] = Message(
                             id: self.messages[assistantIndex].id,
                             role: .assistant,
                             content: accumulatedContent,
                             timestamp: self.messages[assistantIndex].timestamp
                         )
+                        self.messages = updated
                     }
                 }
                 
                 if !Task.isCancelled {
-                    self.status = .idle
+                    await MainActor.run {
+                        self.status = .idle
+                    }
                 }
             } catch {
                 if !Task.isCancelled {
-                    self.messages.removeLast()
-                    self.status = .error(error.localizedDescription)
+                    await MainActor.run {
+                        print("[DEBUG] Error: \(error.localizedDescription)")
+                        self.messages.removeLast()
+                        self.status = .error(error.localizedDescription)
+                    }
                 }
             }
         }
+    }
+    
+    private func sendStreamingViaBackendAndWait(_ userInput: String, assistantIndex: Int) async -> String {
+        guard isConfigured else {
+            status = .error("Please configure your OpenRouter API key in Settings")
+            return ""
+        }
+        
+        var accumulatedContent = ""
+        
+        print("[DEBUG] Backend streaming started (wait), assistantIndex=\(assistantIndex)")
+        
+        do {
+            try await self.backendClient.streamChat(
+                message: userInput,
+                threadId: self.threadId
+            ) { event in
+                if let type = event.type, type == "token", let accumulated = event.accumulated {
+                    accumulatedContent = accumulated
+                } else if let output = event.output {
+                    if let response = output.final_response ?? output.response {
+                        accumulatedContent = response
+                    } else if let msgs = output.messages {
+                        for msg in msgs {
+                            if let content = msg.content, let type = msg.type, type == "ai" {
+                                accumulatedContent = content
+                            }
+                        }
+                    }
+                }
+                
+                print("[DEBUG] Backend chunk (wait), accumulatedContent length=\(accumulatedContent.count)")
+                
+                DispatchQueue.main.async {
+                    var updated = self.messages
+                    updated[assistantIndex] = Message(
+                        id: self.messages[assistantIndex].id,
+                        role: .assistant,
+                        content: accumulatedContent,
+                        timestamp: self.messages[assistantIndex].timestamp
+                    )
+                    self.messages = updated
+                }
+            }
+            
+            await MainActor.run {
+                self.status = .idle
+            }
+        } catch {
+            await MainActor.run {
+                print("[DEBUG] Backend streaming error (wait): \(error.localizedDescription)")
+                self.messages.removeLast()
+                self.status = .error(error.localizedDescription)
+            }
+        }
+        
+        return accumulatedContent
+    }
+    
+    private func sendStreamingViaOpenRouterAndWait(_ userInput: String, assistantIndex: Int) async -> String {
+        guard isConfigured else {
+            status = .error("Please configure your OpenRouter API key in Settings")
+            return ""
+        }
+        
+        var accumulatedContent = ""
+        
+        print("[DEBUG] OpenRouter streaming started (wait), assistantIndex=\(assistantIndex)")
+        
+        do {
+            try await self.openRouterClient.streamCompletion(
+                messages: self.messages.dropLast(),
+                model: self.currentModel,
+                apiKey: self.apiKey
+            ) { chunk in
+                accumulatedContent += chunk
+                Task { @MainActor in
+                    var updated = self.messages
+                    updated[assistantIndex] = Message(
+                        id: self.messages[assistantIndex].id,
+                        role: .assistant,
+                        content: accumulatedContent,
+                        timestamp: self.messages[assistantIndex].timestamp
+                    )
+                    self.messages = updated
+                }
+            }
+            
+            await MainActor.run {
+                self.status = .idle
+            }
+        } catch {
+            await MainActor.run {
+                print("[DEBUG] OpenRouter streaming error (wait): \(error.localizedDescription)")
+                self.messages.removeLast()
+                self.status = .error(error.localizedDescription)
+            }
+        }
+        
+        return accumulatedContent
     }
     
     func cancel() {

@@ -8,12 +8,18 @@ struct PanelContentView: View {
     @State private var isScrolling = false
     @FocusState private var isInputFocused: Bool
     @State private var musicService = MusicPlayerService()
-    
+    @State private var contentHeight: CGFloat = 0
+
+    private let minContentHeight: CGFloat = 50
+    private let titleBarHeight: CGFloat = 60
+    private let minPanelHeight: CGFloat = 300
+
     var body: some View {
         VStack(spacing: 0) {
             titleBar
-            
-            ChatView(harness: harness, inputText: $inputText, isInputFocused: _isInputFocused)
+
+            ChatView(harness: harness, inputText: $inputText, isInputFocused: _isInputFocused, onHeightChange: onHeightChange)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 420)
         .background(
@@ -25,6 +31,32 @@ struct PanelContentView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.gray.opacity(0.15), lineWidth: 1)
         )
+        .onAppear {
+            resizePanel(height: minPanelHeight)
+        }
+    }
+
+    private func onHeightChange(_ height: CGFloat) {
+        let newHeight = max(minPanelHeight, height + titleBarHeight)
+        resizePanel(height: newHeight)
+    }
+
+    private func resizePanel(height: CGFloat) {
+        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0 is AgentPanel }) else { return }
+        guard let panel = window as? AgentPanel else { return }
+        let clampedHeight = min(max(height, minPanelHeight), 800)
+        let currentFrame = panel.frame
+        let newFrame = NSRect(
+            x: currentFrame.origin.x,
+            y: currentFrame.origin.y + currentFrame.height - clampedHeight,
+            width: currentFrame.width,
+            height: clampedHeight
+        )
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(newFrame, display: true)
+        }
     }
     
     private var titleBar: some View {
@@ -67,6 +99,12 @@ struct PanelContentView: View {
                         .frame(height: 20)
                         .opacity(0.3)
                 }
+
+                voiceStatusButton
+
+                Divider()
+                    .frame(height: 20)
+                    .opacity(0.3)
 
                 settingsButton
                 closeButton
@@ -136,6 +174,99 @@ struct PanelContentView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.gray.opacity(0.08))
         )
+    }
+
+    @ViewBuilder
+    private var voiceStatusButton: some View {
+        let vs = harness.voiceService
+        Button {
+            if vs?.isEnabled == true {
+                vs?.disable()
+            } else {
+                vs?.enable()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(voiceButtonBackground)
+                    .frame(width: 28, height: 28)
+
+                Image(systemName: voiceButtonIcon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(voiceButtonColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(voiceButtonTooltip)
+    }
+
+    private var voiceButtonIcon: String {
+        let state = harness.voiceService?.voiceState ?? .idle
+        switch state {
+        case .idle:
+            return harness.voiceService?.isEnabled == true ? "waveform" : "waveform.slash"
+        case .activated:
+            return "waveform"
+        case .processing:
+            return "ellipsis"
+        case .speaking:
+            return "speaker.wave.2.fill"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        case .permissionDenied:
+            return "mic.slash.fill"
+        }
+    }
+
+    private var voiceButtonColor: Color {
+        let state = harness.voiceService?.voiceState ?? .idle
+        switch state {
+        case .idle:
+            return harness.voiceService?.isEnabled == true ? .secondary : .secondary.opacity(0.5)
+        case .activated:
+            return .red
+        case .processing:
+            return .orange
+        case .speaking:
+            return .blue
+        case .error:
+            return .yellow
+        case .permissionDenied:
+            return .red
+        }
+    }
+
+    private var voiceButtonBackground: Color {
+        let state = harness.voiceService?.voiceState ?? .idle
+        switch state {
+        case .activated:
+            return Color.red.opacity(0.15)
+        case .processing:
+            return Color.orange.opacity(0.12)
+        case .speaking:
+            return Color.blue.opacity(0.12)
+        default:
+            return Color.gray.opacity(0.1)
+        }
+    }
+
+    private var voiceButtonTooltip: String {
+        let state = harness.voiceService?.voiceState ?? .idle
+        switch state {
+        case .idle:
+            return harness.voiceService?.isEnabled == true ? "Listening for 'Hey John' — click to disable" : "Voice disabled — click to enable"
+        case .activated:
+            let t = harness.voiceService?.activatedTranscript ?? ""
+            return t.isEmpty ? "Listening..." : t
+        case .processing:
+            return "Processing your request..."
+        case .speaking:
+            return "Speaking response..."
+        case .error(let msg):
+            return "Voice error: \(msg)"
+        case .permissionDenied:
+            return "Microphone or speech recognition permission denied"
+        }
     }
 
     private var settingsButton: some View {

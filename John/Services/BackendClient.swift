@@ -249,10 +249,13 @@ struct StreamEvent: Codable {
     let type: String?
     let node: String?
     let output: OutputData?
+    let content: String?
+    let accumulated: String?
     
     struct OutputData: Codable {
         let messages: [MessageData]?
         let response: String?
+        let final_response: String?
         
         struct MessageData: Codable {
             let type: String?

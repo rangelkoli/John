@@ -30,5 +30,9 @@
     <string></string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>John uses speech recognition to listen for the wake word "Hey John" and transcribe your voice commands.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>John uses the microphone to hear your voice commands after you say "Hey John".</string>
 </dict>
 </plist>

@@ -227,6 +227,70 @@ struct SettingsView: View {
                     }
                 }
                 
+                // Voice Section
+                settingsSection(icon: "waveform", iconColor: .purple, title: "Voice") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.purple.opacity(0.12))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: harness.voiceService?.isEnabled == true ? "waveform" : "waveform.slash")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.purple)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Wake Word")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Say \"Hey John\" to activate")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { harness.voiceService?.isEnabled ?? false },
+                                set: { enabled in
+                                    if enabled {
+                                        harness.voiceService?.enable()
+                                    } else {
+                                        harness.voiceService?.disable()
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.purple.opacity(0.05))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.purple.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+
+                        if harness.voiceService?.voiceState == .permissionDenied {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.yellow)
+                                    .font(.system(size: 13))
+                                Text("Microphone or speech recognition permission was denied. Enable in System Settings > Privacy.")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.yellow.opacity(0.08))
+                            )
+                        }
+                    }
+                }
+
                 // Actions Section
                 settingsSection(icon: "gear", iconColor: .gray, title: "Actions") {
                     HStack(spacing: 12) {

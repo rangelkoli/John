@@ -61,6 +61,7 @@ class AgentPanel: NSPanel {
     }
     
     func showPanel(below rect: NSRect) {
+        harness.resetConversation()
         if let screen = NSScreen.main {
             let panelWidth = frame.width
             let panelHeight = frame.height
@@ -72,7 +73,21 @@ class AgentPanel: NSPanel {
         NotificationCenter.default.post(name: .JohnStatusChanged, object: nil)
     }
     
+    func showPanelWithoutReset() {
+        if let screen = NSScreen.main {
+            let screenFrame = screen.visibleFrame
+            let panelWidth = frame.width
+            let panelHeight = frame.height
+            let x = screenFrame.midX - panelWidth / 2
+            let y = screenFrame.maxY - panelHeight
+            setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        makeKeyAndOrderFront(nil)
+        NotificationCenter.default.post(name: .JohnStatusChanged, object: nil)
+    }
+    
     func showPanelCentered(on screen: NSScreen) {
+        harness.resetConversation()
         let screenFrame = screen.frame
         let panelWidth = frame.width
         let panelHeight = frame.height

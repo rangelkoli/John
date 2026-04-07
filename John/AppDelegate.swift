@@ -34,6 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         setupGlobalHotkey()
         setupSettingsObserver()
+        setupWakeWordObserver()
     }
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -120,6 +121,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .ShowSettings,
             object: nil
         )
+    }
+    
+    private func setupWakeWordObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(wakeWordDetected),
+            name: .WakeWordDetected,
+            object: nil
+        )
+    }
+    
+    @objc private func wakeWordDetected() {
+        guard let button = statusItem.button,
+              let window = button.window else { return }
+        
+        let buttonRect = button.convert(button.bounds, to: nil)
+        let screenRect = window.convertToScreen(buttonRect)
+        
+        if agentPanel.isVisible {
+            agentPanel.hidePanel()
+        }
+        agentPanel.showPanelWithoutReset()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.agentPanel.focusInput()
+        }
     }
     
     @objc private func showSettingsPanel() {

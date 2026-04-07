@@ -29,6 +29,7 @@
         E00000020 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100021; };
         E00000021 /* MusicPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100022; };
         E00000022 /* MusicPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100023; };
+        E00000023 /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100024; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +57,7 @@
         E00100021 /* BackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendClient.swift; sourceTree = "<group>"; };
         E00100022 /* MusicPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerService.swift; sourceTree = "<group>"; };
         E00100023 /* MusicPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerView.swift; sourceTree = "<group>"; };
+        E00100024 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
         E00200000 /* John.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = John.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -122,6 +124,7 @@
                 E00100020 /* GlobalHotkeyManager.swift */,
                 E00100021 /* BackendClient.swift */,
                 E00100022 /* MusicPlayerService.swift */,
+                E00100024 /* VoiceService.swift */,
             );
             path = Services;
             sourceTree = "<group>";
@@ -255,6 +258,7 @@
                 E00000020 /* BackendClient.swift in Sources */,
                 E00000021 /* MusicPlayerService.swift in Sources */,
                 E00000022 /* MusicPlayerView.swift in Sources */,
+                E00000023 /* VoiceService.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
