@@ -12,7 +12,7 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if harness.status.isActive || !currentResponse.isEmpty {
+            if harness.status.isActive || !currentResponse.isEmpty || harness.status.isError {
                 responseArea
             } else if let vs = harness.voiceService, vs.voiceState == .activated, !vs.activatedTranscript.isEmpty {
                 voiceTranscriptArea
@@ -47,6 +47,7 @@ struct ChatView: View {
                     .fill(Color.red.opacity(0.8))
                     .frame(width: 8, height: 8)
                     .opacity(0.8)
+                    .scaleEffect(isVoiceActive ? 1.2 : 1.0)
                     .overlay(
                         Circle()
                             .stroke(Color.red.opacity(0.4), lineWidth: 2)
@@ -71,12 +72,16 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
+    private var isVoiceActive: Bool {
+        harness.voiceService?.voiceState == .activated
+    }
+    
     private var responseArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if let message = latestAssistantMessage {
-                        MarkdownText(content: message.content)
+                        MessageContentView(content: message.content)
                             .textSelection(.enabled)
                             .font(.system(size: 14, weight: .regular, design: .rounded))
                             .lineSpacing(4)
@@ -87,6 +92,17 @@ struct ChatView: View {
                     if harness.status.isActive {
                         LoadingIndicator()
                             .id("loading")
+                    }
+                    if let errorMsg = harness.status.errorMessage {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 12))
+                            Text(errorMsg)
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -106,7 +122,7 @@ struct ChatView: View {
                 onHeightChange(height + 70)
             }
             .onChange(of: harness.messages) {
-                withAnimation {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     if harness.status.isActive {
                         proxy.scrollTo("loading", anchor: .bottom)
                     } else if let message = latestAssistantMessage {
@@ -132,11 +148,13 @@ struct ChatView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(sendButtonForeground)
                     .frame(width: 28, height: 28)
+                    .scaleEffect(isSendButtonEnabled ? 1.0 : 0.85)
                     .background(Circle().fill(sendButtonBackground))
             }
             .buttonStyle(.plain)
             .disabled(inputText.isEmpty || !harness.isConfigured || harness.status.isActive)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: inputText.isEmpty)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: inputText.isEmpty)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSendButtonEnabled)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -153,6 +171,10 @@ struct ChatView: View {
         )
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+    
+    private var isSendButtonEnabled: Bool {
+        !inputText.isEmpty && harness.isConfigured && !harness.status.isActive
     }
 
     private var sendButtonBackground: Color {
@@ -181,6 +203,22 @@ struct ResponseHeightPreference: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+struct MessageContentView: View {
+    let content: String
+    @State private var isAppearing = false
+    
+    var body: some View {
+        MarkdownText(content: content)
+            .opacity(isAppearing ? 1 : 0)
+            .offset(y: isAppearing ? 0 : 8)
+            .onAppear {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    isAppearing = true
+                }
+            }
     }
 }
 

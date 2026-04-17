@@ -101,22 +101,26 @@ class DeepAgent:
         """Main agent reasoning node"""
         messages = state["messages"]
         iteration_count = sum(1 for m in messages if isinstance(m, AIMessage))
-        
+        print(f"[agent_node] iteration={iteration_count}, messages={len(messages)}")
+
         if iteration_count > self.max_iterations:
+            print(f"[agent_node] max iterations ({self.max_iterations}) reached, stopping")
             return {
                 "should_continue": False,
                 "final_response": "Maximum iterations reached. Please clarify your request."
             }
-        
+
         if self.conversation_buffer.messages:
             context_messages = self.conversation_buffer.get_messages()
             messages = context_messages + list(messages)
-        
+
         system_message = SystemMessage(content=SYSTEM_PROMPT)
         full_messages = [system_message] + list(messages)
-        
+        print(f"[agent_node] sending {len(full_messages)} messages to {self.model_name}")
+
         response = self.llm_with_tools.invoke(full_messages)
-        
+        print(f"[agent_node] response type={type(response).__name__}, tool_calls={getattr(response, 'tool_calls', [])}")
+
         return {"messages": [response]}
     
     def _tools_node(self, state: AgentState) -> Dict[str, Any]:
@@ -133,9 +137,11 @@ class DeepAgent:
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call["args"]
-            
+            print(f"[tools_node] calling tool={tool_name}, args={tool_args}")
+
             tool_result = self._execute_tool(tool_name, tool_args)
-            
+            print(f"[tools_node] tool={tool_name} result={str(tool_result)[:300]}")
+
             tool_messages.append(
                 ToolMessage(
                     content=json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result),
@@ -169,36 +175,41 @@ class DeepAgent:
         """Analyze tool results and decide next action"""
         observations = state.get("observations", [])
         tool_results = state.get("tool_results", [])
-        
+        current_step = state.get("current_step", 0) + 1
+        print(f"[reason_node] step={current_step}, total_observations={len(observations)}")
+
         if tool_results:
             last_result = tool_results[-1]
             observation = f"Tool: {last_result['tool']}, Result: {last_result['result'][:200]}..."
             observations.append(observation)
-        
+            print(f"[reason_node] new observation: {observation[:200]}")
+
         return {
             "observations": observations,
-            "current_step": state.get("current_step", 0) + 1
+            "current_step": current_step
         }
     
     def _respond_node(self, state: AgentState) -> Dict[str, Any]:
         """Generate final response"""
         messages = state["messages"]
-        
+        print(f"[respond_node] building final response from {len(messages)} messages")
+
         last_ai_message = None
         for msg in reversed(messages):
             if isinstance(msg, AIMessage):
                 last_ai_message = msg
                 break
-        
+
         if last_ai_message and last_ai_message.content:
             self.conversation_buffer.add_message(last_ai_message)
-            
             final_response = last_ai_message.content
+            print(f"[respond_node] final response ({len(final_response)} chars): {final_response[:200]}")
             return {
                 "final_response": final_response,
                 "should_continue": False
             }
-        
+
+        print("[respond_node] no AI message found, returning fallback")
         return {
             "final_response": "I apologize, but I couldn't generate a response. Please try again.",
             "should_continue": False
@@ -231,7 +242,7 @@ class DeepAgent:
         return "respond"
     
     async def astream(self, user_input: str, thread_id: str = "default"):
-        """Stream agent responses"""
+        """Stream agent responses with token-level streaming"""
         config = {"configurable": {"thread_id": thread_id}}
         
         human_message = HumanMessage(content=user_input)
@@ -247,13 +258,30 @@ class DeepAgent:
             "final_response": None
         }
         
-        async for event in self.compiled_graph.astream(initial_state, config):
+        accumulated = ""
+        async for event in self.compiled_graph.astream(initial_state, config, stream_mode="updates"):
             for node_name, node_output in event.items():
+                # Yield node-level event
                 yield {
                     "type": "node",
                     "node": node_name,
                     "output": self._serialize_output(node_output)
                 }
+                
+                # If this is the respond node, stream the final_response text token-by-token
+                if node_name == "respond":
+                    final_response = node_output.get("final_response")
+                    if final_response:
+                        chunk_size = 4
+                        for i in range(0, len(final_response), chunk_size):
+                            chunk = final_response[i:i + chunk_size]
+                            accumulated = final_response[:i + chunk_size]
+                            yield {
+                                "type": "token",
+                                "node": node_name,
+                                "content": chunk,
+                                "accumulated": accumulated
+                            }
     
     async def ainvoke(self, user_input: str, thread_id: str = "default") -> Dict[str, Any]:
         """Invoke agent and returnfinal response"""

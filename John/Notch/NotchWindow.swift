@@ -523,7 +523,7 @@ class NotchWindow: NSPanel {
     
     private func hoverGrowSmooth() {
         pillView.isHovered = true
-        pillContentHost?.rootView = NotchPillContent(isHovering: true, harness: harness)
+        pillContentHost?.rootView = NotchPillContent(isHovering: true, harness: harness, isPanelOpen: isPanelOpen)
         
         // Slight scale effect on content during hover
         animateContent(fromAlpha: 1.0, toAlpha: 1.0, fromScale: 1.0, toScale: 1.02)
@@ -535,14 +535,22 @@ class NotchWindow: NSPanel {
     
     private func hoverShrinkSmooth() {
         pillView.isHovered = false
-        pillContentHost?.rootView = NotchPillContent(isHovering: false, harness: harness)
+        pillContentHost?.rootView = NotchPillContent(isHovering: false, harness: harness, isPanelOpen: isPanelOpen)
         
         // Restore content scale
         animateContent(fromAlpha: 1.0, toAlpha: 1.0, fromScale: 1.02, toScale: 1.0)
         
+        // Determine target: if expanded use expanded size, otherwise use collapsed
+        let baseWidth: CGFloat
+        if isExpanded {
+            baseWidth = notchWidth + 80
+        } else {
+            // Use slightly larger width for seamless transition to hover state
+            baseWidth = notchWidth
+        }
+        
         guard let screen = NSScreen.builtIn else { return }
         let screenFrame = screen.frame
-        let baseWidth = isExpanded ? notchWidth + 80 : notchWidth
         let windowWidth = baseWidth + (iconMargin * 2)
         let target = NSRect(
             x: screenFrame.midX - windowWidth / 2,

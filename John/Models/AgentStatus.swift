@@ -15,6 +15,16 @@ enum AgentStatus: Equatable {
             return false
         }
     }
+
+    var isError: Bool {
+        if case .error = self { return true }
+        return false
+    }
+
+    var errorMessage: String? {
+        if case .error(let msg) = self { return msg }
+        return nil
+    }
     
     var displayText: String? {
         switch self {

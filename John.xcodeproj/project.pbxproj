@@ -30,6 +30,12 @@
         E00000021 /* MusicPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100022; };
         E00000022 /* MusicPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100023; };
         E00000023 /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100024; };
+        E00000024 /* CalendarModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100025; };
+        E00000025 /* EventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100026; };
+        E00000026 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100027; };
+        E00000027 /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100028; };
+        E00000028 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100029; };
+        E00000029 /* MusicVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00100030; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +64,12 @@
         E00100022 /* MusicPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerService.swift; sourceTree = "<group>"; };
         E00100023 /* MusicPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerView.swift; sourceTree = "<group>"; };
         E00100024 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
+        E00100025 /* CalendarModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModel.swift; sourceTree = "<group>"; };
+        E00100026 /* EventModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventModel.swift; sourceTree = "<group>"; };
+        E00100027 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
+        E00100028 /* CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManager.swift; sourceTree = "<group>"; };
+        E00100029 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+        E00100030 /* MusicVisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicVisualizerView.swift; sourceTree = "<group>"; };
         E00200000 /* John.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = John.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -110,6 +122,8 @@
                 E00100003 /* AgentStatus.swift */,
                 E00100004 /* AppConfiguration.swift */,
                 E00100005 /* Notifications.swift */,
+                E00100025 /* CalendarModel.swift */,
+                E00100026 /* EventModel.swift */,
             );
             path = Models;
             sourceTree = "<group>";
@@ -125,6 +139,8 @@
                 E00100021 /* BackendClient.swift */,
                 E00100022 /* MusicPlayerService.swift */,
                 E00100024 /* VoiceService.swift */,
+                E00100027 /* CalendarService.swift */,
+                E00100028 /* CalendarManager.swift */,
             );
             path = Services;
             sourceTree = "<group>";
@@ -154,6 +170,8 @@
                 E00100014 /* PanelContentView.swift */,
                 E00100015 /* SettingsView.swift */,
                 E00100023 /* MusicPlayerView.swift */,
+                E00100029 /* CalendarView.swift */,
+                E00100030 /* MusicVisualizerView.swift */,
             );
             path = Views;
             sourceTree = "<group>";
@@ -259,6 +277,12 @@
                 E00000021 /* MusicPlayerService.swift in Sources */,
                 E00000022 /* MusicPlayerView.swift in Sources */,
                 E00000023 /* VoiceService.swift in Sources */,
+                E00000024 /* CalendarModel.swift in Sources */,
+                E00000025 /* EventModel.swift in Sources */,
+                E00000026 /* CalendarService.swift in Sources */,
+                E00000027 /* CalendarManager.swift in Sources */,
+                E00000028 /* CalendarView.swift in Sources */,
+                E00000029 /* MusicVisualizerView.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };

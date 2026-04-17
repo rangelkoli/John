@@ -164,12 +164,12 @@ final class AgentHarness {
         }
         
         var accumulatedContent = ""
-        await MainActor.run {
+        let assistantIndex = await MainActor.run {
             let assistantMessage = Message(role: .assistant, content: "")
             messages.append(assistantMessage)
+            return messages.count - 1
         }
-        let assistantIndex = messages.count - 1
-        
+
         print("[DEBUG] Backend streaming started, assistantIndex=\(assistantIndex)")
         
         task = Task { [weak self] in
@@ -217,14 +217,16 @@ final class AgentHarness {
                 if !Task.isCancelled {
                     await MainActor.run {
                         print("[DEBUG] Backend streaming error: \(error.localizedDescription)")
-                        self.messages.removeLast()
+                        if accumulatedContent.isEmpty {
+                            self.messages.removeLast()
+                        }
                         self.status = .error(error.localizedDescription)
                     }
                 }
             }
         }
     }
-    
+
     private func sendViaOpenRouter(_ userInput: String) async {
         guard isConfigured else {
             status = .error("Please configure your OpenRouter API key in Settings")
@@ -271,12 +273,12 @@ final class AgentHarness {
         }
         
         var accumulatedContent = ""
-        let assistantMessage = Message(role: .assistant, content: "")
-        await MainActor.run {
+        let assistantIndex = await MainActor.run {
+            let assistantMessage = Message(role: .assistant, content: "")
             messages.append(assistantMessage)
+            return messages.count - 1
         }
-        let assistantIndex = messages.count - 1
-        
+
         print("[DEBUG] Assistant message appended at index \(assistantIndex)")
         
         task = Task { [weak self] in
@@ -310,14 +312,16 @@ final class AgentHarness {
                 if !Task.isCancelled {
                     await MainActor.run {
                         print("[DEBUG] Error: \(error.localizedDescription)")
-                        self.messages.removeLast()
+                        if accumulatedContent.isEmpty {
+                            self.messages.removeLast()
+                        }
                         self.status = .error(error.localizedDescription)
                     }
                 }
             }
         }
     }
-    
+
     private func sendStreamingViaBackendAndWait(_ userInput: String, assistantIndex: Int) async -> String {
         guard isConfigured else {
             status = .error("Please configure your OpenRouter API key in Settings")

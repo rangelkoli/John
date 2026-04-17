@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum PanelTab {
+    case chat, calendar
+}
+
 struct PanelContentView: View {
     @Bindable var harness: AgentHarness
     let onClose: () -> Void
@@ -9,6 +13,12 @@ struct PanelContentView: View {
     @FocusState private var isInputFocused: Bool
     @State private var musicService = MusicPlayerService()
     @State private var contentHeight: CGFloat = 0
+    @State private var activeTab: PanelTab = .chat
+
+    @State private var isVoiceButtonHovered = false
+    @State private var isSettingsHovered = false
+    @State private var isCloseHovered = false
+    @State private var isCalendarHovered = false
 
     private let minContentHeight: CGFloat = 50
     private let titleBarHeight: CGFloat = 60
@@ -17,9 +27,18 @@ struct PanelContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             titleBar
+            tabBar
 
-            ChatView(harness: harness, inputText: $inputText, isInputFocused: _isInputFocused, onHeightChange: onHeightChange)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if activeTab == .chat {
+                ChatView(harness: harness, inputText: $inputText, isInputFocused: _isInputFocused, onHeightChange: onHeightChange)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+            } else {
+                CalendarView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(16)
+                    .transition(.opacity)
+            }
         }
         .frame(minWidth: 420)
         .background(
@@ -125,6 +144,44 @@ struct PanelContentView: View {
         )
     }
     
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(title: "Chat", systemImage: "bubble.left.and.bubble.right", tab: .chat)
+            tabButton(title: "Calendar", systemImage: "calendar", tab: .calendar)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 4)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.98))
+        .overlay(
+            Rectangle()
+                .fill(Color.gray.opacity(0.1))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+
+    private func tabButton(title: String, systemImage: String, tab: PanelTab) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { activeTab = tab }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .medium))
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(activeTab == tab ? .primary : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(activeTab == tab ? Color.gray.opacity(0.15) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var miniMusicPlayer: some View {
         HStack(spacing: 6) {
             if let art = musicService.albumArt {
@@ -140,6 +197,11 @@ struct PanelContentView: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
+
+            if musicService.isPlaying {
+                MusicVisualizerView(isPlaying: true)
+                    .frame(width: 16, height: 12)
+            }
 
             HStack(spacing: 2) {
                 Button { musicService.previousTrack() } label: {
@@ -189,6 +251,7 @@ struct PanelContentView: View {
             ZStack {
                 Circle()
                     .fill(voiceButtonBackground)
+                    .scaleEffect(isVoiceButtonHovered ? 1.1 : 1.0)
                     .frame(width: 28, height: 28)
 
                 Image(systemName: voiceButtonIcon)
@@ -198,6 +261,7 @@ struct PanelContentView: View {
         }
         .buttonStyle(.plain)
         .help(voiceButtonTooltip)
+        .onHover { isVoiceButtonHovered = $0 }
     }
 
     private var voiceButtonIcon: String {
@@ -275,14 +339,16 @@ struct PanelContentView: View {
         } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(isSettingsHovered ? .primary : .secondary)
+                .scaleEffect(isSettingsHovered ? 1.1 : 1.0)
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(Color.gray.opacity(isSettingsHovered ? 0.2 : 0.1))
                 )
         }
         .buttonStyle(.plain)
+        .onHover { isSettingsHovered = $0 }
     }
     
     private var closeButton: some View {
@@ -291,14 +357,15 @@ struct PanelContentView: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(isCloseHovered ? .white : .secondary)
+                .scaleEffect(isCloseHovered ? 1.1 : 1.0)
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(isCloseHovered ? Color.red.opacity(0.8) : Color.gray.opacity(0.1))
                 )
         }
         .buttonStyle(.plain)
+        .onHover { isCloseHovered = $0 }
     }
-    
 }

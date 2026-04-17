@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: Message
+    @State private var isAppearing = false
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -17,7 +18,7 @@ struct MessageBubble: View {
                 }
                 
                 if message.role == .assistant {
-                    MarkdownText(content: message.content)
+                    MessageContentView(content: message.content)
                         .textSelection(.enabled)
                         .font(.system(size: 14, weight: .regular, design: .rounded))
                         .lineSpacing(4)
@@ -63,6 +64,8 @@ struct MessageBubble: View {
                         lineWidth: 1
                     )
             )
+            .scaleEffect(isAppearing ? 1 : 0.95)
+            .opacity(isAppearing ? 1 : 0)
             .frame(maxWidth: 480, alignment: message.role == .user ? .trailing : .leading)
             
             if message.role == .assistant {
@@ -72,6 +75,11 @@ struct MessageBubble: View {
             }
         }
         .padding(.vertical, 4)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                isAppearing = true
+            }
+        }
     }
     
     private var userAvatar: some View {

@@ -10,6 +10,8 @@ struct AppConfiguration {
         static let selectedModel = "selected_model"
         static let showInNotch = "show_in_notch"
         static let lastUsedModel = "last_used_model"
+        static let backendHost = "backend_host"
+        static let backendPort = "backend_port"
     }
     
     var openRouterAPIKey: String {
@@ -25,6 +27,16 @@ struct AppConfiguration {
     var showInNotch: Bool {
         get { defaults.object(forKey: Keys.showInNotch) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Keys.showInNotch) }
+    }
+    
+    var backendHost: String {
+        get { defaults.string(forKey: Keys.backendHost) ?? "127.0.0.1" }
+        set { defaults.set(newValue, forKey: Keys.backendHost) }
+    }
+    
+    var backendPort: Int {
+        get { defaults.integer(forKey: Keys.backendPort) == 0 ? 8765 : defaults.integer(forKey: Keys.backendPort) }
+        set { defaults.set(newValue, forKey: Keys.backendPort) }
     }
     
     private init() {}

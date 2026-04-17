@@ -24,7 +24,8 @@ final class VoiceService: NSObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    private let synthesizer = AVSpeechSynthesizer()
+    private var ttsPlayer: AVAudioPlayer?
+    private var ttsPlaybackContinuation: CheckedContinuation<Void, Never>?
 
     private var silenceTimer: Timer?
     private let silenceThreshold: TimeInterval = 1.5
@@ -34,7 +35,6 @@ final class VoiceService: NSObject {
 
     override init() {
         super.init()
-        synthesizer.delegate = self
     }
 
     // MARK: - Public
@@ -128,7 +128,10 @@ final class VoiceService: NSObject {
         if audioEngine.isRunning {
             audioEngine.stop()
         }
-        synthesizer.stopSpeaking(at: .immediate)
+        ttsPlayer?.stop()
+        ttsPlayer = nil
+        ttsPlaybackContinuation?.resume()
+        ttsPlaybackContinuation = nil
     }
 
     // MARK: - Wake Word Recognition
@@ -298,16 +301,49 @@ final class VoiceService: NSObject {
     // MARK: - TTS
 
     private func speakResponse(_ text: String) {
+        Task {
+            let plainText = stripMarkdown(text)
+            await playOpenAITTS(plainText)
+        }
+    }
+    
+    private func playOpenAITTS(_ text: String) async {
         voiceState = .speaking
         isPausedForSpeaking = true
+        
+        do {
+            let audioData = try await BackendClient.shared.speakTTS(text: text)
+            guard !audioData.isEmpty else {
+                print("[TTS] Empty audio response from backend")
+                returnToIdle()
+                return
+            }
 
-        let plainText = stripMarkdown(text)
-        let utterance = AVSpeechUtterance(string: plainText)
-        utterance.rate = 0.52
-        utterance.pitchMultiplier = 1.0
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+            let player = try AVAudioPlayer(data: audioData)
+            player.delegate = self
+            player.prepareToPlay()
+            ttsPlayer = player
 
-        synthesizer.speak(utterance)
+            guard player.play() else {
+                print("[TTS] Failed to start audio playback")
+                returnToIdle()
+                return
+            }
+
+            await withCheckedContinuation { continuation in
+                self.ttsPlaybackContinuation = continuation
+            }
+        } catch {
+            print("[TTS] Playback error: \(error.localizedDescription)")
+            returnToIdle()
+        }
+    }
+
+    private func finishTTSPlayback() {
+        ttsPlaybackContinuation?.resume()
+        ttsPlaybackContinuation = nil
+        ttsPlayer = nil
+        returnToIdle()
     }
 
     private func returnToIdle() {
@@ -335,12 +371,21 @@ final class VoiceService: NSObject {
     }
 }
 
-// MARK: - AVSpeechSynthesizerDelegate
+// MARK: - AVAudioPlayerDelegate
 
-extension VoiceService: AVSpeechSynthesizerDelegate {
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+extension VoiceService: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
-            self?.returnToIdle()
+            self?.finishTTSPlayback()
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor [weak self] in
+            if let error {
+                print("[TTS] Decode error: \(error.localizedDescription)")
+            }
+            self?.finishTTSPlayback()
         }
     }
 }

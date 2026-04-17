@@ -34,5 +34,9 @@
     <string>John uses speech recognition to listen for the wake word "Hey John" and transcribe your voice commands.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>John uses the microphone to hear your voice commands after you say "Hey John".</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>John reads your calendar events to help you stay on top of your schedule.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>John reads your reminders so you can view and complete them from the app.</string>
 </dict>
 </plist>

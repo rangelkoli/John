@@ -5,6 +5,8 @@ struct SettingsView: View {
     @State private var apiKey: String = ""
     @State private var showAPIKey = false
     @State private var customSystemPrompt: String = ""
+    @State private var backendHost: String = "127.0.0.1"
+    @State private var backendPort: String = "8765"
     
     var body: some View {
         ScrollView {
@@ -291,6 +293,86 @@ struct SettingsView: View {
                     }
                 }
 
+                // Network Section
+                settingsSection(icon: "network", iconColor: .blue, title: "Network") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Connect to backend on a different machine")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Host IP")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                TextField("127.0.0.1", text: $backendHost)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 13))
+                                    .frame(width: 120)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color(nsColor: .textBackgroundColor))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Port")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                TextField("8765", text: $backendPort)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 13))
+                                    .frame(width: 80)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color(nsColor: .textBackgroundColor))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 10) {
+                            Button("Connect") {
+                                if let port = Int(backendPort) {
+                                    Task {
+                                        await BackendClient.shared.configure(host: backendHost, port: port)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            
+                            Button("Test Connection") {
+                                Task {
+                                    do {
+                                        let healthy = try await BackendClient.shared.checkHealth()
+                                        print("Connection test: \(healthy ? "OK" : "Failed")")
+                                    } catch {
+                                        print("Connection error: \(error)")
+                                    }
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            
+                            Spacer()
+                        }
+                    }
+                }
+
                 // Actions Section
                 settingsSection(icon: "gear", iconColor: .gray, title: "Actions") {
                     HStack(spacing: 12) {
@@ -324,6 +406,9 @@ struct SettingsView: View {
         .onAppear {
             loadAPIKey()
             customSystemPrompt = AgentHarness.defaultSystemPrompt
+            backendHost = UserDefaults.standard.string(forKey: "backend_host") ?? "127.0.0.1"
+            let port = UserDefaults.standard.integer(forKey: "backend_port")
+            backendPort = port == 0 ? "8765" : "\(port)"
         }
     }
     
