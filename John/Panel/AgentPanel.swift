@@ -93,8 +93,20 @@ class AgentPanel: NSPanel {
         let panelHeight = frame.height
         let x = screenFrame.midX - panelWidth / 2
         let y = screenFrame.maxY - panelHeight
-        setFrameOrigin(NSPoint(x: x, y: y))
+
+        // Start slightly above final position for slide-in effect
+        let slideOffset: CGFloat = 16
+        setFrame(NSRect(x: x, y: y + slideOffset, width: panelWidth, height: panelHeight), display: false)
+        alphaValue = 0
         makeKeyAndOrderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.35
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
+            animator().alphaValue = 1
+            animator().setFrame(NSRect(x: x, y: y, width: panelWidth, height: panelHeight), display: true)
+        }
+
         NotificationCenter.default.post(name: .JohnStatusChanged, object: nil)
     }
     
